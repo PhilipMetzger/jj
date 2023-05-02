@@ -262,6 +262,21 @@ async fn rewrite_commit<'a>(
     })
 }
 
+/// The Strategy `run` uses to deal with any failure in it's subprocesses.
+#[derive(Debug, Default, Clone, clap::ValueEnum)]
+pub(crate) enum ErrorStrategy {
+    /// Stop at any revision if the subprocess fails.
+    /// Cancels any scheduled work but lets already running processes finish
+    /// their work.
+    #[default]
+    Stop,
+    /// Continue if an error occurs, similar to Make's --keep-going.
+    Continue,
+    /// Signal a fatal failure and stop immediately any processes. Also stops
+    /// any running jobs.
+    Fatal,
+}
+
 /// Run a command across a set of revisions.
 ///
 ///
@@ -288,6 +303,34 @@ pub struct RunArgs {
     /// How many processes should run in parallel, uses by default all cores.
     #[arg(long, short)]
     jobs: Option<usize>,
+    /// Setup the required environment and instead of applying running script,
+    /// display all actions which would be done.
+    #[arg(long, short)]
+    dry_run: bool,
+    /// Ignore changes across multiple run invocations.
+    #[arg(long)]
+    read_only: bool,
+    /// Show the diff of an affected revision.
+    #[arg(long)]
+    show: Option<RevisionArg>,
+    /// After running the command rebase the revisions parent onto the new
+    /// commit. This is the default strategy.
+    #[arg(long)]
+    rebase: bool,
+    /// After running the command, re-adjust the parent commit to the new
+    /// revision.
+    #[arg(long, conflicts_with = "rebase")]
+    reparent: bool,
+    /// Clean up all hidden state for run.
+    #[arg(long)]
+    clean: bool,
+    /// Run the command for all revisions, even if a single one fails.
+    /// Implies error-strategy=continue
+    #[arg(short, long)]
+    keep_going: bool,
+    /// The strategy `jj run` should use, if a failure occurs.
+    #[arg(value_enum, default_value = "ErrorStrategy::Stop")]
+    error_strategy: ErrorStrategy,
 }
 
 pub fn cmd_run(ui: &mut Ui, command: &CommandHelper, args: &RunArgs) -> Result<(), CommandError> {
@@ -322,6 +365,19 @@ pub fn cmd_run(ui: &mut Ui, command: &CommandHelper, args: &RunArgs) -> Result<(
     let stored_commits = create_working_copies(&topo_sorted_commits)?;
 
     let tx = workspace_command.start_transaction();
+    let mut workqueue = WorkQueue::builder()
+        .commits(topo_sorted_commits)
+        .command(args.shell_command)
+        // If the user has not specified the amount of jobs to use, create one per cpu core,
+        // this models falls apart for large jobs, which themselves require a nproc jobs
+        // like cargo or ninja.
+        .jobs(_jobs)
+        .continue_on_error(true)
+        //  .fail_on_error(if opts.fail_fast || other_thing { ... } else {} )
+        //  .reparent_commits(opts.reparent);
+        .build();
+    let tx = workspace_command.start_transaction();
+    // let (error_recv, status_recv) = workqueue.channels();
     // Start all the jobs.
     async { run_inner(tx, sender_tx, jobs, &args.shell_command, &stored_commits).await? }
         .block_on();

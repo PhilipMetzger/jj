@@ -39,7 +39,7 @@ pub struct RunArgs {
     shell_command: String,
     /// The revisions to change.
     #[arg(long, short, default_value = "@")]
-    revisions: Vec<RevisionArg>,
+    revisions: RevisionArg,
     /// A no-op option to match the interface of `git rebase -x`.
     #[arg(short = 'x', hide = true)]
     unused_command: bool,
@@ -52,7 +52,7 @@ pub fn cmd_run(ui: &mut Ui, command: &CommandHelper, args: &RunArgs) -> Result<(
     let workspace_command = command.workspace_helper(ui)?;
     let _resolved_commits: Vec<_> = workspace_command
         .parse_union_revsets(&args.revisions)?
-        .evaluate_to_commits()?
+        .evaluate_to_commits()
         .try_collect()?;
     // Jobs are resolved in this order:
     // 1. Commandline argument iff > 0.
@@ -65,5 +65,9 @@ pub fn cmd_run(ui: &mut Ui, command: &CommandHelper, args: &RunArgs) -> Result<(
     }
     // Fallback to a single user-visible job.
     .unwrap_or(1usize);
+
+    let repo = workspace_command.repo();
+    let cache_backend = repo.working_copy_store();
+    let _wc_copies = cache_backend.get_or_create_stores(_resolved_commits)?;
     Err(user_error("This is a stub, do not use"))
 }

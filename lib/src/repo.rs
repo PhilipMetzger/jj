@@ -37,6 +37,7 @@ use crate::commit::{Commit, CommitByCommitterTimestamp};
 use crate::commit_builder::CommitBuilder;
 use crate::default_index::{DefaultIndexStore, DefaultMutableIndex};
 use crate::default_submodule_store::DefaultSubmoduleStore;
+use crate::default_working_copy_store::DefaultWorkingCopyStore;
 use crate::file_util::{IoResultExt as _, PathError};
 use crate::git_backend::GitBackend;
 use crate::index::{ChangeIdIndex, Index, IndexStore, MutableIndex, ReadonlyIndex};
@@ -60,6 +61,7 @@ use crate::store::Store;
 use crate::submodule_store::SubmoduleStore;
 use crate::transaction::Transaction;
 use crate::view::View;
+use crate::working_copy_store::WorkingCopyStore;
 use crate::{backend, dag_walk, op_store, revset};
 
 pub trait Repo {
@@ -72,6 +74,8 @@ pub trait Repo {
     fn view(&self) -> &View;
 
     fn submodule_store(&self) -> &Arc<dyn SubmoduleStore>;
+
+    fn working_copy_store(&self) -> &Arc<dyn WorkingCopyStore>;
 
     fn resolve_change_id(&self, change_id: &ChangeId) -> Option<Vec<CommitId>> {
         // Replace this if we added more efficient lookup method.
@@ -98,6 +102,8 @@ pub struct ReadonlyRepo {
     index_store: Arc<dyn IndexStore>,
     submodule_store: Arc<dyn SubmoduleStore>,
     index: OnceCell<Box<dyn ReadonlyIndex>>,
+    working_copy_store: Arc<dyn WorkingCopyStore>,
+    // Declared after `change_id_index` since it must outlive it on drop.
     change_id_index: OnceCell<Box<dyn ChangeIdIndex>>,
     // TODO: This should eventually become part of the index and not be stored fully in memory.
     view: View,
@@ -140,6 +146,11 @@ impl ReadonlyRepo {
         &|_settings, store_path| Box::new(DefaultSubmoduleStore::init(store_path))
     }
 
+    pub fn default_working_copy_store_initializer() -> &'static WorkingCopyStoreInitializer<'static>
+    {
+        &|store_path| Box::new(DefaultWorkingCopyStore::init(store_path))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn init(
         user_settings: &UserSettings,
@@ -150,6 +161,7 @@ impl ReadonlyRepo {
         op_heads_store_initializer: &OpHeadsStoreInitializer,
         index_store_initializer: &IndexStoreInitializer,
         submodule_store_initializer: &SubmoduleStoreInitializer,
+        working_copy_store_initializer: &WorkingCopyStoreInitializer,
     ) -> Result<Arc<ReadonlyRepo>, RepoInitError> {
         let repo_path = repo_path.canonicalize().context(repo_path)?;
 
@@ -191,6 +203,14 @@ impl ReadonlyRepo {
             .context(&submodule_store_type_path)?;
         let submodule_store = Arc::from(submodule_store);
 
+        let working_copy_store_path = repo_path.join("working_copy_store");
+        fs::create_dir(&working_copy_store_path).context(&working_copy_store_path)?;
+        let working_copy_store = working_copy_store_initializer(&working_copy_store_path);
+        let working_copy_store_type_path = working_copy_store_path.join("type");
+        fs::write(&working_copy_store_type_path, working_copy_store.name())
+            .context(&working_copy_store_path)?;
+        let working_copy_store = Arc::from(working_copy_store);
+
         let root_operation_data = op_store
             .read_operation(op_store.root_operation_id())
             .expect("failed to read root operation");
@@ -211,6 +231,7 @@ impl ReadonlyRepo {
             index: OnceCell::new(),
             change_id_index: OnceCell::new(),
             view: root_view,
+            working_copy_store,
             submodule_store,
         });
         let mut tx = repo.start_transaction(user_settings);
@@ -229,6 +250,7 @@ impl ReadonlyRepo {
             op_heads_store: self.op_heads_store.clone(),
             index_store: self.index_store.clone(),
             submodule_store: self.submodule_store.clone(),
+            working_copy_store: self.working_copy_store.clone(),
         }
     }
 
@@ -323,6 +345,10 @@ impl Repo for ReadonlyRepo {
         &self.submodule_store
     }
 
+    fn working_copy_store(&self) -> &Arc<dyn WorkingCopyStore> {
+        &self.working_copy_store
+    }
+
     fn resolve_change_id_prefix(&self, prefix: &HexPrefix) -> PrefixResolution<Vec<CommitId>> {
         self.change_id_index().resolve_prefix(prefix)
     }
@@ -340,6 +366,7 @@ pub type IndexStoreInitializer<'a> =
     dyn Fn(&UserSettings, &Path) -> Result<Box<dyn IndexStore>, BackendInitError> + 'a;
 pub type SubmoduleStoreInitializer<'a> =
     dyn Fn(&UserSettings, &Path) -> Box<dyn SubmoduleStore> + 'a;
+pub type WorkingCopyStoreInitializer<'a> = dyn Fn(&Path) -> Box<dyn WorkingCopyStore> + 'a;
 
 type BackendFactory =
     Box<dyn Fn(&UserSettings, &Path) -> Result<Box<dyn Backend>, BackendLoadError>>;
@@ -348,6 +375,7 @@ type OpHeadsStoreFactory = Box<dyn Fn(&UserSettings, &Path) -> Box<dyn OpHeadsSt
 type IndexStoreFactory =
     Box<dyn Fn(&UserSettings, &Path) -> Result<Box<dyn IndexStore>, BackendLoadError>>;
 type SubmoduleStoreFactory = Box<dyn Fn(&UserSettings, &Path) -> Box<dyn SubmoduleStore>>;
+type WorkingCopyStoreFactory = Box<dyn Fn(&UserSettings, &Path) -> Box<dyn WorkingCopyStore>>;
 
 pub fn merge_factories_map<F>(base: &mut HashMap<String, F>, ext: HashMap<String, F>) {
     for (name, factory) in ext {
@@ -368,6 +396,7 @@ pub struct StoreFactories {
     op_heads_store_factories: HashMap<String, OpHeadsStoreFactory>,
     index_store_factories: HashMap<String, IndexStoreFactory>,
     submodule_store_factories: HashMap<String, SubmoduleStoreFactory>,
+    stored_working_copy_factories: HashMap<String, WorkingCopyStoreFactory>,
 }
 
 impl Default for StoreFactories {
@@ -408,6 +437,12 @@ impl Default for StoreFactories {
             Box::new(|_settings, store_path| Box::new(DefaultSubmoduleStore::load(store_path))),
         );
 
+        // WorkingCopyStores
+        factories.add_working_copy_store(
+            DefaultWorkingCopyStore::name(),
+            Box::new(|_settings, store_path| Box::new(DefaultWorkingCopyStore::load(store_path))),
+        );
+
         factories
     }
 }
@@ -438,6 +473,7 @@ impl StoreFactories {
             op_heads_store_factories: HashMap::new(),
             index_store_factories: HashMap::new(),
             submodule_store_factories: HashMap::new(),
+            stored_working_copy_factories: HashMap::new(),
         }
     }
 
@@ -587,6 +623,33 @@ impl StoreFactories {
 
         Ok(submodule_store_factory(settings, store_path))
     }
+    pub fn add_working_copy_store(&mut self, name: &str, factory: WorkingCopyStoreFactory) {
+        self.stored_working_copy_factories
+            .insert(name.to_string(), factory);
+    }
+
+    pub fn load_working_copy_store(
+        &self,
+        settings: &UserSettings,
+        store_path: &Path,
+    ) -> Result<Box<dyn WorkingCopyStore>, StoreLoadError> {
+        // For compatibility with repos without a working_copy_store.
+        // TODO Delete default in TBD version
+        let working_copy_store_type = read_store_type_compat(
+            "working_copy_store",
+            store_path.join("type"),
+            DefaultWorkingCopyStore::name,
+        )?;
+        let working_copy_store_factory = self
+            .stored_working_copy_factories
+            .get(&working_copy_store_type)
+            .ok_or_else(|| StoreLoadError::UnsupportedType {
+                store: "working_copy_store",
+                store_type: working_copy_store_type.to_string(),
+            })?;
+
+        Ok(working_copy_store_factory(settings, store_path))
+    }
 }
 
 pub fn read_store_type_compat(
@@ -629,6 +692,7 @@ pub struct RepoLoader {
     op_heads_store: Arc<dyn OpHeadsStore>,
     index_store: Arc<dyn IndexStore>,
     submodule_store: Arc<dyn SubmoduleStore>,
+    working_copy_store: Arc<dyn WorkingCopyStore>,
 }
 
 impl RepoLoader {
@@ -654,6 +718,11 @@ impl RepoLoader {
             store_factories
                 .load_submodule_store(user_settings, &repo_path.join("submodule_store"))?,
         );
+        let working_copy_store = Arc::from(
+            store_factories
+                .load_working_copy_store(user_settings, &repo_path.join("working_copy_store"))?,
+        );
+
         Ok(Self {
             repo_path: repo_path.to_path_buf(),
             repo_settings,
@@ -662,6 +731,7 @@ impl RepoLoader {
             op_heads_store,
             index_store,
             submodule_store,
+            working_copy_store,
         })
     }
 
@@ -720,6 +790,7 @@ impl RepoLoader {
             index_store: self.index_store.clone(),
             submodule_store: self.submodule_store.clone(),
             index: OnceCell::with_value(index),
+            working_copy_store: self.working_copy_store.clone(),
             change_id_index: OnceCell::new(),
             view,
         };
@@ -753,6 +824,7 @@ impl RepoLoader {
             settings: self.repo_settings.clone(),
             index_store: self.index_store.clone(),
             submodule_store: self.submodule_store.clone(),
+            working_copy_store: self.working_copy_store.clone(),
             index: OnceCell::new(),
             change_id_index: OnceCell::new(),
             view,
@@ -1742,13 +1814,17 @@ impl Repo for MutableRepo {
         self.index.as_index()
     }
 
+    fn submodule_store(&self) -> &Arc<dyn SubmoduleStore> {
+        self.base_repo.submodule_store()
+    }
+
+    fn working_copy_store(&self) -> &Arc<dyn WorkingCopyStore> {
+        self.base_repo.working_copy_store()
+    }
+
     fn view(&self) -> &View {
         self.view
             .get_or_ensure_clean(|v| self.enforce_view_invariants(v))
-    }
-
-    fn submodule_store(&self) -> &Arc<dyn SubmoduleStore> {
-        self.base_repo.submodule_store()
     }
 
     fn resolve_change_id_prefix(&self, prefix: &HexPrefix) -> PrefixResolution<Vec<CommitId>> {

@@ -12,30 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This file contains the [`WorkingCopyStore`] interface which is used to cached working copies.
+//! This file contains the [`WorkingCopyStore`] interface which is used to
+//! cached working copies.
 //!
 //! These must be implemented for Virtual Filesystems such as [EdenFS]
-//! to allow cheaper working copy materializations, they are used for the `jj run`
-//! implementation.
+//! to allow cheaper working copy materializations, they are used for the `jj
+//! run` implementation.
 //!
 //!
 //! [EdenFS]: www.github.com/facebook/sapling/main/blob/eden/fs
 
-use std::{any::Any, convert::Infallible, io};
+use std::any::Any;
+use std::convert::Infallible;
+use std::io;
 
-use crate::{
-    backend::{BackendError, CommitId},
-    commit::Commit,
-    local_working_copy::LocalWorkingCopy,
-    repo::Repo,
-    revset::RevsetEvaluationError,
-};
 use thiserror::Error;
+
+use crate::backend::{BackendError, CommitId};
+use crate::commit::Commit;
+use crate::local_working_copy::LocalWorkingCopy;
+use crate::repo::Repo;
+use crate::revset::RevsetEvaluationError;
 
 /// An Error from the Cache, which [`WorkingCopyStore`] represents.
 #[derive(Debug, Error)]
 pub enum WorkingCopyStoreError {
-    /// We failed to initialize something, the store or any underlying working-copies.
+    /// We failed to initialize something, the store or any underlying
+    /// working-copies.
     #[error("failed to initialize")]
     Initialization(#[from] io::Error),
     /// An error occured during a `CachedWorkingCopy` update.
@@ -55,17 +58,19 @@ pub enum WorkingCopyStoreError {
 }
 
 /// A `WorkingCopyStore` manages the working copies on disk for `jj run`.
-/// It's an ideal extension point for an virtual filesystem, as they ease the creation of
-/// working copies.
+/// It's an ideal extension point for an virtual filesystem, as they ease the
+/// creation of working copies.
 ///
-/// The trait's design is similar to a database. Clients request a single or multiple working-copies
-/// and the backend can coalesce the requests if needed. This allows an implementation to build
-/// a global view of all actively used working-copies and where they are stored.
+/// The trait's design is similar to a database. Clients request a single or
+/// multiple working-copies and the backend can coalesce the requests if needed.
+/// This allows an implementation to build a global view of all actively used
+/// working-copies and where they are stored.
 pub trait WorkingCopyStore: Send + Sync {
     /// Return `self` as `Any` to allow trait upcasting.
     fn as_any(&self) -> &dyn Any;
 
-    /// The name of the backend, determines how it actually interacts with working copies.
+    /// The name of the backend, determines how it actually interacts with
+    /// working copies.
     fn name(&self) -> &str;
 
     /// Get existing or create `Stores` for `revisions`.

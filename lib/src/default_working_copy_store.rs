@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This file contains the default implementation of the `WorkingCopyStore` for both the Git and
-//! native Backend. It stores the working copies in the `.jj/run/default` path as directories.
+//! This file contains the default implementation of the `WorkingCopyStore` for
+//! both the Git and native Backend. It stores the working copies in the
+//! `.jj/run/default` path as directories.
 use std::any::Any;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use itertools::Itertools;
 
@@ -38,8 +38,9 @@ struct StoredWorkingCopy {
     commit: Commit,
     /// Current state of the associated [`WorkingCopy`].
     state: Arc<TreeState>,
-    /// The output path for tools, which do not specify a location. Like C(++) Compilers, scripts and more.
-    /// It also contains the respective output stream, so stderr and stdout which was redirected for this commit.
+    /// The output path for tools, which do not specify a location. Like C(++)
+    /// Compilers, scripts and more. It also contains the respective output
+    /// stream, so stderr and stdout which was redirected for this commit.
     output_path: PathBuf,
     /// Path to the associated working copy.
     working_copy_path: PathBuf,
@@ -72,8 +73,8 @@ impl StoredWorkingCopy {
         }
     }
 
-    /// Replace the currently cached working-copy and it's tree with the tree from `commit`.
-    /// Automatically marks it as used.
+    /// Replace the currently cached working-copy and it's tree with the tree
+    /// from `commit`. Automatically marks it as used.
     fn replace_with(&mut self, commit: &Commit) -> Result<Self, WorkingCopyStoreError> {
         let Self {
             commit: _,
@@ -108,8 +109,8 @@ pub struct DefaultWorkingCopyStore {
     stored_paths: PathBuf,
     /// All managed working copies.
     stored_working_copies: Vec<StoredWorkingCopy>,
-    /// The store which owns this and all other backend related stuff. It gets set during the first
-    /// creation of the managed working copies.
+    /// The store which owns this and all other backend related stuff. It gets
+    /// set during the first creation of the managed working copies.
     store: OnceLock<Arc<Store>>,
 }
 
@@ -150,7 +151,8 @@ fn to_wc_name(id: &MergedTreeId) -> String {
                 })
                 .collect_vec();
             let mut obfuscated: String = ids.concat();
-            // `PATH_MAX` could be a problem for different operating systems, so truncate it.
+            // `PATH_MAX` could be a problem for different operating systems, so truncate
+            // it.
             if obfuscated.len() >= 255 {
                 obfuscated.truncate(200);
             }
@@ -239,9 +241,9 @@ impl WorkingCopyStore for DefaultWorkingCopyStore {
             !self.stored_working_copies.is_empty(),
             "we must have working copies after the first call"
         );
-        // If we already have some existing working copies, try to minimize pending work.
-        // This is done by finding the intersection of the existing and new commits and only
-        // creating the non-overlapping revisions.
+        // If we already have some existing working copies, try to minimize pending
+        // work. This is done by finding the intersection of the existing and
+        // new commits and only creating the non-overlapping revisions.
         let new_revision_ids = revisions.iter().map(|rev| rev.id().clone()).collect_vec();
         let contained_revisions = self
             .stored_working_copies
@@ -249,8 +251,8 @@ impl WorkingCopyStore for DefaultWorkingCopyStore {
             .map(|sc| sc.commit.id().clone())
             .collect_vec();
         let contained_revset = RevsetExpression::commits(contained_revisions);
-        // intersect the existing revisions with the newly requested revisions to see which need to
-        // be replaced.
+        // intersect the existing revisions with the newly requested revisions to see
+        // which need to be replaced.
         let overlapping_commits_revset =
             &contained_revset.intersection(&RevsetExpression::commits(new_revision_ids));
         let overlappping_commits: Vec<commit::Commit> = overlapping_commits_revset

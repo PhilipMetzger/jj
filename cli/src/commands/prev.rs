@@ -18,7 +18,7 @@ use jj_lib::revset::{RevsetExpression, RevsetFilterPredicate, RevsetIteratorExt}
 
 use crate::cli_util::{short_commit_hash, CommandHelper};
 use crate::command_error::{user_error, CommandError};
-use crate::commands::next::choose_commit;
+use crate::movement_util::choose_commit;
 use crate::ui::Ui;
 /// Change the working copy revision relative to the parent revision
 ///

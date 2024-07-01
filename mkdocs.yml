@@ -140,5 +140,3 @@ nav:
     - 'Sparse Patterns v2': 'design/sparse-v2.md'
     - 'Tracking branches': 'design/tracking-branches.md'
     - 'Copy tracking and tracing': 'design/copy-tracking.md'
-
-- 'Development Roadmap': "roadmap.md"

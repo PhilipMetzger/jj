@@ -32,7 +32,7 @@ use crate::repo_path::RepoPath;
 use crate::repo_path::RepoPathBuf;
 
 /// A collection of CopyRecords.
-#[derive(Default, Debug)]
+#[derive(allocative::Allocative, Default, Debug)]
 pub struct CopyRecords {
     records: Vec<CopyRecord>,
     // Maps from `source` or `target` to the index of the entry in `records`.
@@ -92,7 +92,7 @@ impl CopyRecords {
 }
 
 /// Whether or not the source path was deleted.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(allocative::Allocative, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyOperation {
     /// The source path was not deleted.
     Copy,
@@ -101,7 +101,7 @@ pub enum CopyOperation {
 }
 
 /// A `TreeDiffEntry` with copy information.
-#[derive(Debug)]
+#[derive(allocative::Allocative, Debug)]
 pub struct CopiesTreeDiffEntry {
     /// The path.
     pub path: CopiesTreeDiffEntryPath,
@@ -110,7 +110,7 @@ pub struct CopiesTreeDiffEntry {
 }
 
 /// Path and copy information of `CopiesTreeDiffEntry`.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(allocative::Allocative, Clone, Debug, Eq, PartialEq)]
 pub struct CopiesTreeDiffEntryPath {
     /// The source path and copy information if this is a copy or rename.
     pub source: Option<(RepoPathBuf, CopyOperation)>,

@@ -90,6 +90,13 @@ macro_rules! impl_id_type {
             }
         }
 
+        impl allocative::Allocative for $name {
+            fn visit<'a, 'b: 'a>(&self, vis: &'a mut allocative::Visitor<'b>) {
+                let visitor = vis.enter_self(self);
+                visitor.exit();
+            }
+        }
+
         impl serde::Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where

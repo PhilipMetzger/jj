@@ -79,10 +79,14 @@ impl CopyId {
 #[error("Out-of-range date")]
 pub struct TimestampOutOfRange;
 
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+#[derive(
+    allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord,
+)]
 pub struct MillisSinceEpoch(pub i64);
 
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+#[derive(
+    allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord,
+)]
 pub struct Timestamp {
     pub timestamp: MillisSinceEpoch,
     // time zone offset in minutes
@@ -136,7 +140,7 @@ impl serde::Serialize for Timestamp {
 }
 
 /// Represents a [`Commit`] signature.
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, serde::Serialize)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, serde::Serialize)]
 pub struct Signature {
     pub name: String,
     pub email: String,
@@ -144,7 +148,7 @@ pub struct Signature {
 }
 
 /// Represents a cryptographically signed [`Commit`] signature.
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone)]
 pub struct SecureSig {
     pub data: Vec<u8>,
     pub sig: Vec<u8>,
@@ -152,7 +156,7 @@ pub struct SecureSig {
 
 pub type SigningFn<'a> = dyn FnMut(&[u8]) -> SignResult<Vec<u8>> + Send + 'a;
 
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, serde::Serialize)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, serde::Serialize)]
 pub struct Commit {
     pub parents: Vec<CommitId>,
     // TODO: delete commit.predecessors when we can assume that most commits are
@@ -172,8 +176,23 @@ pub struct Commit {
     pub secure_sig: Option<SecureSig>,
 }
 
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone)]
+pub struct ConflictTerm {
+    pub value: TreeValue,
+}
+
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone)]
+pub struct Conflict {
+    // A conflict is represented by a list of positive and negative states that need to be applied.
+    // In a simple 3-way merge of B and C with merge base A, the conflict will be { add: [B, C],
+    // remove: [A] }. Also note that a conflict of the form { add: [A], remove: [] } is the
+    // same as non-conflict A.
+    pub removes: Vec<ConflictTerm>,
+    pub adds: Vec<ConflictTerm>,
+}
+
 /// An individual copy event, from file A -> B.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(allocative::Allocative, Debug, PartialEq, Eq, Clone)]
 pub struct CopyRecord {
     /// The destination of the copy, B.
     pub target: RepoPathBuf,
@@ -201,7 +220,7 @@ pub struct CopyRecord {
 
 /// Describes the copy history of a file. The copy object is unchanged when a
 /// file is modified.
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
 pub struct CopyHistory {
     /// The file's current path.
     pub current_path: RepoPathBuf,
@@ -228,7 +247,7 @@ pub struct BackendInitError(pub Box<dyn std::error::Error + Send + Sync>);
 pub struct BackendLoadError(pub Box<dyn std::error::Error + Send + Sync>);
 
 /// Commit-backend error that may occur after the backend is loaded.
-#[derive(Debug, Error)]
+#[derive(allocative::Allocative, Debug, Error)]
 pub enum BackendError {
     #[error(
         "Invalid hash length for object of type {object_type} (expected {expected} bytes, got \
@@ -244,24 +263,28 @@ pub enum BackendError {
     InvalidUtf8 {
         object_type: String,
         hash: String,
+        #[allocative(skip)]
         source: std::str::Utf8Error,
     },
     #[error("Object {hash} of type {object_type} not found")]
     ObjectNotFound {
         object_type: String,
         hash: String,
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     #[error("Error when reading object {hash} of type {object_type}")]
     ReadObject {
         object_type: String,
         hash: String,
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     #[error("Access denied to read object {hash} of type {object_type}")]
     ReadAccessDenied {
         object_type: String,
         hash: String,
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     #[error(
@@ -271,15 +294,17 @@ pub enum BackendError {
     ReadFile {
         path: RepoPathBuf,
         id: FileId,
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     #[error("Could not write object of type {object_type}")]
     WriteObject {
         object_type: &'static str,
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     #[error(transparent)]
-    Other(Box<dyn std::error::Error + Send + Sync>),
+    Other(#[allocative(skip)] Box<dyn std::error::Error + Send + Sync>),
     /// A valid operation attempted, but failed because it isn't supported by
     /// the particular backend.
     #[error("{0}")]
@@ -288,7 +313,7 @@ pub enum BackendError {
 
 pub type BackendResult<T> = Result<T, BackendError>;
 
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TreeValue {
     // TODO: When there's a CopyId here, the copy object's path must match
     // the path identified by the tree.
@@ -347,7 +372,7 @@ impl<'a> Iterator for TreeEntriesNonRecursiveIterator<'a> {
     }
 }
 
-#[derive(ContentHash, Default, PartialEq, Eq, Debug, Clone)]
+#[derive(allocative::Allocative, ContentHash, Default, PartialEq, Eq, Debug, Clone)]
 pub struct Tree {
     entries: Vec<(RepoPathComponentBuf, TreeValue)>,
 }

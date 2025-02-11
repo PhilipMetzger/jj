@@ -37,7 +37,7 @@ use crate::file_util;
 use crate::merge::Diff;
 
 /// Owned `RepoPath` component.
-#[derive(ContentHash, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(allocative::Allocative, ContentHash, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RepoPathComponentBuf {
     // Don't add more fields. Eq, Hash, and Ord must be compatible with the
     // borrowed RepoPathComponent type.
@@ -202,7 +202,7 @@ impl DoubleEndedIterator for RepoPathComponentsIter<'_> {
 impl FusedIterator for RepoPathComponentsIter<'_> {}
 
 /// Owned repository path.
-#[derive(ContentHash, Clone, Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(allocative::Allocative, ContentHash, Clone, Eq, Hash, PartialEq, serde::Serialize)]
 #[serde(transparent)]
 pub struct RepoPathBuf {
     // Don't add more fields. Eq, Hash, and Ord must be compatible with the
@@ -211,7 +211,9 @@ pub struct RepoPathBuf {
 }
 
 /// Borrowed repository path.
-#[derive(ContentHash, Eq, Hash, PartialEq, RefCastCustom, serde::Serialize)]
+#[derive(
+    allocative::Allocative, ContentHash, Eq, Hash, PartialEq, RefCastCustom, serde::Serialize,
+)]
 #[repr(transparent)]
 #[serde(transparent)]
 pub struct RepoPath {

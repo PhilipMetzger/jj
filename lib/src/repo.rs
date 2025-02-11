@@ -153,10 +153,13 @@ pub trait Repo {
     ) -> IndexResult<usize>;
 }
 
+#[derive(allocative::Allocative)]
 pub struct ReadonlyRepo {
     loader: RepoLoader,
     operation: Operation,
+    #[allocative(skip)] // TODO: Fix this
     index: Box<dyn ReadonlyIndex>,
+    #[allocative(skip)] // TODO: Fix this
     change_id_index: OnceCell<Box<dyn ChangeIdIndex>>,
     // TODO: This should eventually become part of the index and not be stored fully in memory.
     view: View,
@@ -665,13 +668,17 @@ pub enum RepoLoaderError {
 
 /// Helps create `ReadonlyRepo` instances of a repo at the head operation or at
 /// a given operation.
-#[derive(Clone)]
+#[derive(allocative::Allocative, Clone)]
 pub struct RepoLoader {
     settings: UserSettings,
     store: Arc<Store>,
+    #[allocative(skip)]
     op_store: Arc<dyn OpStore>,
+    #[allocative(skip)]
     op_heads_store: Arc<dyn OpHeadsStore>,
+    #[allocative(skip)]
     index_store: Arc<dyn IndexStore>,
+    #[allocative(skip)]
     submodule_store: Arc<dyn SubmoduleStore>,
 }
 
@@ -868,7 +875,7 @@ impl RepoLoader {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(allocative::Allocative, Clone, Debug, PartialEq, Eq)]
 enum Rewrite {
     /// The old commit was rewritten as this new commit. Children should be
     /// rebased onto the new commit.
@@ -891,8 +898,10 @@ impl Rewrite {
     }
 }
 
+#[derive(allocative::Allocative)]
 pub struct MutableRepo {
     base_repo: Arc<ReadonlyRepo>,
+    #[allocative(skip)] // TODO: find out if this is fixable
     index: Box<dyn MutableIndex>,
     view: DirtyCell<View>,
     /// Mapping from new commit to its predecessors.
@@ -2085,7 +2094,7 @@ mod dirty_cell {
     /// Cell that lazily updates the value after `mark_dirty()`.
     ///
     /// A clean value can be immutably borrowed within the `self` lifetime.
-    #[derive(Clone, Debug)]
+    #[derive(allocative::Allocative, Clone, Debug)]
     pub struct DirtyCell<T> {
         // Either clean or dirty value is set. The value is boxed to reduce stack space
         // and memcopy overhead.

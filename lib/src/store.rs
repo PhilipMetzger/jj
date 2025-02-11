@@ -53,10 +53,14 @@ const TREE_CACHE_CAPACITY: usize = 1000;
 
 /// Wraps the low-level backend and makes it return more convenient types. Also
 /// adds caching.
+#[derive(allocative::Allocative)]
 pub struct Store {
+    #[allocative(skip)]
     backend: Box<dyn Backend>,
     signer: Signer,
+    #[allocative(skip)] // TODO: figure this out
     commit_cache: Mutex<CLruCache<CommitId, Arc<backend::Commit>>>,
+    #[allocative(skip)]
     tree_cache: Mutex<CLruCache<(RepoPathBuf, TreeId), Arc<backend::Tree>>>,
     merge_options: MergeOptions,
 }

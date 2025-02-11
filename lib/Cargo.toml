@@ -30,6 +30,7 @@ name = "diff_bench"
 harness = false
 
 [dependencies]
+allocative = { workspace = true }
 async-trait = { workspace = true }
 blake2 = { workspace = true }
 bstr = { workspace = true }

@@ -39,14 +39,15 @@ use crate::fmt_util::binary_prefix;
 use crate::ref_name::RemoteNameBuf;
 use crate::signing::SignBehavior;
 
-#[derive(Debug, Clone)]
+#[derive(allocative::Allocative, Debug, Clone)]
 pub struct UserSettings {
     config: Arc<StackedConfig>,
     data: Arc<UserSettingsData>,
+    #[allocative(skip)] // TODO: figure this out
     rng: Arc<JJRng>,
 }
 
-#[derive(Debug)]
+#[derive(allocative::Allocative, Debug)]
 struct UserSettingsData {
     user_name: String,
     user_email: String,

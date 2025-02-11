@@ -36,9 +36,10 @@ use crate::view::View;
 
 /// A wrapper around [`op_store::Operation`] that defines additional methods and
 /// stores a pointer to the `OpStore` the operation belongs to.
-#[derive(Clone, serde::Serialize)]
+#[derive(allocative::Allocative, Clone, serde::Serialize)]
 pub struct Operation {
     #[serde(skip)]
+    #[allocative(skip)]
     op_store: Arc<dyn OpStore>,
     id: OperationId,
     #[serde(flatten)]

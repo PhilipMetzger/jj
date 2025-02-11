@@ -34,7 +34,7 @@ use crate::repo_path::RepoPathBuf;
 use crate::repo_path::RepoPathComponent;
 use crate::store::Store;
 
-#[derive(Clone)]
+#[derive(allocative::Allocative, Clone)]
 pub struct Tree {
     store: Arc<Store>,
     dir: RepoPathBuf,

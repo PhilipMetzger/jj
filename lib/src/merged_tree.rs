@@ -57,7 +57,7 @@ use crate::tree_merge::merge_trees;
 
 /// Presents a view of a merged set of trees at the root directory, as well as
 /// conflict labels.
-#[derive(Clone)]
+#[derive(allocative::Allocative, Clone)]
 pub struct MergedTree {
     store: Arc<Store>,
     tree_ids: Merge<TreeId>,

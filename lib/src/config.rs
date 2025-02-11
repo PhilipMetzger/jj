@@ -278,7 +278,7 @@ impl ToConfigNamePath for &[&str] {
 }
 
 /// Source of configuration variables in order of precedence.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(allocative::Allocative, Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ConfigSource {
     /// Default values (which has the lowest precedence.)
     Default,
@@ -312,13 +312,14 @@ impl Display for ConfigSource {
 }
 
 /// Set of configuration variables with source information.
-#[derive(Clone, Debug)]
+#[derive(allocative::Allocative, Clone, Debug)]
 pub struct ConfigLayer {
     /// Source type of this layer.
     pub source: ConfigSource,
     /// Source file path of this layer if any.
     pub path: Option<PathBuf>,
     /// Configuration variables.
+    #[allocative(skip)] // TODO: maybe implement
     pub data: DocumentMut,
 }
 
@@ -636,7 +637,7 @@ impl ConfigFile {
 /// values, so are never merged. This might be confusing because they would be
 /// merged if two TOML documents are concatenated literally. Avoid using array
 /// of tables syntax.
-#[derive(Clone, Debug)]
+#[derive(allocative::Allocative, Clone, Debug)]
 pub struct StackedConfig {
     /// Layers sorted by `source` (the lowest precedence one first.)
     layers: Vec<Arc<ConfigLayer>>,

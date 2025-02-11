@@ -142,7 +142,7 @@ pub enum SignInitError {
 }
 
 /// A enum that describes if a created/rewritten commit should be signed or not.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[derive(allocative::Allocative, Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SignBehavior {
     /// Drop existing signatures.
@@ -162,15 +162,18 @@ pub enum SignBehavior {
 }
 
 /// Wraps low-level signing backends and adds caching, similar to `Store`.
-#[derive(Debug)]
+#[derive(allocative::Allocative, Debug)]
 pub struct Signer {
     /// The backend that is used for signing commits.
     /// Optional because signing might not be configured.
+    #[allocative(skip)] // TODO: figure this out
     main_backend: Option<Box<dyn SigningBackend>>,
     /// All known backends without the main one - used for verification.
     /// Main backend is also used for verification, but it's not in this list
     /// for ownership reasons.
+    #[allocative(skip)] // TODO: figure this out
     backends: Vec<Box<dyn SigningBackend>>,
+    #[allocative(skip)] // TODO: figure this out
     cache: Mutex<CLruCache<CommitId, Verification>>,
 }
 

@@ -49,6 +49,7 @@ required-features = ["test-fakes"]
 name = "runner"
 
 [dependencies]
+allocative = { workspace = true }
 bstr = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
@@ -83,6 +84,7 @@ scm-record = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 slab = { workspace = true }
+starlark = { workspace = true }
 strsim = { workspace = true }
 tempfile = { workspace = true }
 textwrap = { workspace = true }

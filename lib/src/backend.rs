@@ -94,11 +94,15 @@ impl CopyId {
 pub struct TimestampOutOfRange;
 
 /// The number of milliseconds since the Unix epoch.
-#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+#[derive(
+    allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord,
+)]
 pub struct MillisSinceEpoch(pub i64);
 
 /// A timestamp with millisecond precision and a time zone offset.
-#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+#[derive(
+    allocative::Allocative, ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord,
+)]
 pub struct Timestamp {
     /// The number of milliseconds since the Unix epoch.
     pub timestamp: MillisSinceEpoch,
@@ -157,7 +161,7 @@ impl serde::Serialize for Timestamp {
 
 /// Represents a person/entity and a timestamp for when they authored or
 /// committed a commit.
-#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, serde::Serialize)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, serde::Serialize)]
 pub struct Signature {
     /// The name of the person/entity.
     pub name: String,
@@ -169,7 +173,7 @@ pub struct Signature {
 }
 
 /// Represents a cryptographically signed [`Commit`] signature.
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone)]
 pub struct SecureSig {
     /// The raw data that was signed to produce this signature.
     pub data: Vec<u8>,
@@ -183,7 +187,7 @@ pub type SigningFn<'a> = dyn FnMut(&[u8]) -> SignResult<Vec<u8>> + Send + 'a;
 
 /// Represents a commit object, which contains a reference to the contents a
 /// that point in time, along with metadata about the commit.
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, serde::Serialize)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, serde::Serialize)]
 pub struct Commit {
     /// The parent commits of this commit. Commits typically have one parents,
     /// but they can have any number of parents. Only the root commit has no
@@ -217,8 +221,23 @@ pub struct Commit {
     pub secure_sig: Option<SecureSig>,
 }
 
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone)]
+pub struct ConflictTerm {
+    pub value: TreeValue,
+}
+
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone)]
+pub struct Conflict {
+    // A conflict is represented by a list of positive and negative states that need to be applied.
+    // In a simple 3-way merge of B and C with merge base A, the conflict will be { add: [B, C],
+    // remove: [A] }. Also note that a conflict of the form { add: [A], remove: [] } is the
+    // same as non-conflict A.
+    pub removes: Vec<ConflictTerm>,
+    pub adds: Vec<ConflictTerm>,
+}
+
 /// An individual copy event, from file A -> B.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(allocative::Allocative, Debug, PartialEq, Eq, Clone)]
 pub struct CopyRecord {
     /// The destination of the copy, B.
     pub target: RepoPathBuf,
@@ -247,7 +266,7 @@ pub struct CopyRecord {
 
 /// Describes the copy history of a file. The copy object is unchanged when a
 /// file is modified.
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
 pub struct CopyHistory {
     /// The file's current path.
     pub current_path: RepoPathBuf,
@@ -283,7 +302,7 @@ pub struct BackendInitError(pub Box<dyn std::error::Error + Send + Sync>);
 pub struct BackendLoadError(pub Box<dyn std::error::Error + Send + Sync>);
 
 /// Commit-backend error that may occur after the backend is loaded.
-#[derive(Debug, Error)]
+#[derive(allocative::Allocative, Debug, Error)]
 pub enum BackendError {
     /// The caller attempted to read an object by specifying an ID with an
     /// invalid hash length for this backend.
@@ -313,6 +332,7 @@ pub enum BackendError {
         /// The hex hash of the object that had invalid UTF-8.
         hash: String,
         /// The source error.
+        #[allocative(skip)]
         source: std::str::Utf8Error,
     },
     /// The caller attempted to read an object that doesn't exist.
@@ -324,6 +344,7 @@ pub enum BackendError {
         /// The hex hash of the object that was not found.
         hash: String,
         /// The source error.
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// Failed to read an object due to an I/O error or other unexpected error.
@@ -335,6 +356,7 @@ pub enum BackendError {
         /// The hex hash of the object that we failed to read.
         hash: String,
         /// The source error.
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// The caller attempted to read an object but doesn't have permission to
@@ -348,6 +370,7 @@ pub enum BackendError {
         /// to read.
         hash: String,
         /// The source error.
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// Failed to read a file's content due to an I/O error or other unexpected
@@ -362,6 +385,7 @@ pub enum BackendError {
         /// The ID of the file we failed to read.
         id: FileId,
         /// The source error.
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// Failed to write an object due to an I/O error or other unexpected error.
@@ -371,11 +395,12 @@ pub enum BackendError {
         /// "tree".
         object_type: &'static str,
         /// The source error.
+        #[allocative(skip)]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// Some other error that doesn't fit into the above categories.
     #[error(transparent)]
-    Other(Box<dyn std::error::Error + Send + Sync>),
+    Other(#[allocative(skip)] Box<dyn std::error::Error + Send + Sync>),
     /// A valid operation was attempted, but it failed because it isn't
     /// supported by the particular backend.
     #[error("{0}")]
@@ -386,7 +411,7 @@ pub enum BackendError {
 pub type BackendResult<T> = Result<T, BackendError>;
 
 /// Identifies the content at a given path in a tree.
-#[derive(ContentHash, Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(allocative::Allocative, ContentHash, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TreeValue {
     // TODO: When there's a CopyId here, the copy object's path must match
     // the path identified by the tree.
@@ -463,7 +488,7 @@ impl<'a> Iterator for TreeEntriesNonRecursiveIterator<'a> {
 ///
 /// The entries must be sorted (by `RepoPathComponentBuf`'s ordering) and must
 /// not contain duplicate names.
-#[derive(ContentHash, Default, PartialEq, Eq, Debug, Clone)]
+#[derive(allocative::Allocative, ContentHash, Default, PartialEq, Eq, Debug, Clone)]
 pub struct Tree {
     entries: Vec<(RepoPathComponentBuf, TreeValue)>,
 }

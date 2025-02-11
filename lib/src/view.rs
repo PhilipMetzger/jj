@@ -39,7 +39,7 @@ use crate::refs::LocalAndRemoteRef;
 use crate::str_util::StringMatcher;
 
 /// A wrapper around [`op_store::View`] that defines additional methods.
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(allocative::Allocative, PartialEq, Eq, Debug, Clone)]
 pub struct View {
     data: op_store::View,
 }

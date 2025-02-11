@@ -47,7 +47,9 @@ use crate::revset;
 /// Use `.as_str()` or `.as_symbol()` for displaying. Other than that, this can
 /// be considered an immutable `String`.
 // Eq, Hash, and Ord must be compatible with GitRefName.
-#[derive(Clone, ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    allocative::Allocative, Clone, ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd,
+)]
 pub struct GitRefNameBuf(String);
 
 /// Borrowed Git ref name in fully-qualified form (e.g. `refs/heads/main`.)
@@ -63,14 +65,18 @@ pub struct GitRefName(str);
 /// Use `.as_str()` or `.as_symbol()` for displaying. Other than that, this can
 /// be considered an immutable `String`.
 // Eq, Hash, and Ord must be compatible with RefName.
-#[derive(Clone, ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    allocative::Allocative, Clone, ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd,
+)]
 pub struct RefNameBuf(String);
 
 /// Borrowed local (or local part of remote) bookmark or tag name.
 ///
 /// Use `.as_str()` or `.as_symbol()` for displaying. Other than that, this can
 /// be considered an immutable `str`.
-#[derive(ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, RefCastCustom)]
+#[derive(
+    allocative::Allocative, ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, RefCastCustom,
+)]
 #[repr(transparent)]
 pub struct RefName(str);
 
@@ -79,7 +85,9 @@ pub struct RefName(str);
 /// Use `.as_str()` or `.as_symbol()` for displaying. Other than that, this can
 /// be considered an immutable `String`.
 // Eq, Hash, and Ord must be compatible with RemoteName.
-#[derive(Clone, ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    allocative::Allocative, Clone, ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd,
+)]
 pub struct RemoteNameBuf(String);
 
 /// Borrowed remote name.
@@ -95,7 +103,18 @@ pub struct RemoteName(str);
 /// Use `.as_str()` or `.as_symbol()` for displaying. Other than that, this can
 /// be considered an immutable `String`.
 // Eq, Hash, and Ord must be compatible with WorkspaceName.
-#[derive(Clone, ContentHash, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize)]
+#[derive(
+    allocative::Allocative,
+    Clone,
+    ContentHash,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    serde::Serialize,
+)]
 #[serde(transparent)]
 pub struct WorkspaceNameBuf(String);
 

@@ -58,6 +58,7 @@ pub enum TransactionCommitError {
 /// to the contents of the repository and a Tree represents the repository's
 /// contents after the change. See the documentation for [`op_store::Operation`]
 /// and [`op_store::View`] for more information.
+#[derive(allocative::Allocative)]
 pub struct Transaction {
     mut_repo: MutableRepo,
     parent_ops: Vec<Operation>,

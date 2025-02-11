@@ -20,7 +20,7 @@ use crate::merge::Merge;
 
 /// Optionally contains a set of labels for the terms of a conflict. Resolved
 /// merges cannot be labeled.
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(allocative::Allocative, PartialEq, Eq, Hash, Clone)]
 pub struct ConflictLabels {
     // If the merge is resolved, the label must be empty.
     labels: Merge<String>,

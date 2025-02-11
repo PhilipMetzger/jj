@@ -46,7 +46,9 @@ use crate::ref_name::WorkspaceNameBuf;
 id_type!(pub ViewId { hex() });
 id_type!(pub OperationId { hex() });
 
-#[derive(ContentHash, PartialEq, Eq, Hash, Clone, Debug, serde::Serialize)]
+#[derive(
+    allocative::Allocative, ContentHash, PartialEq, Eq, Hash, Clone, Debug, serde::Serialize,
+)]
 #[serde(transparent)]
 pub struct RefTarget {
     merge: Merge<Option<CommitId>>,
@@ -134,7 +136,7 @@ impl RefTarget {
 }
 
 /// Remote bookmark or tag.
-#[derive(ContentHash, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(allocative::Allocative, ContentHash, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RemoteRef {
     pub target: RefTarget,
     pub state: RemoteRefState,
@@ -186,7 +188,7 @@ impl RemoteRef {
 }
 
 /// Whether the ref is tracked or not.
-#[derive(ContentHash, Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(allocative::Allocative, ContentHash, Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum RemoteRefState {
     /// Remote ref is not merged in to the local ref.
     New,
@@ -245,7 +247,7 @@ pub struct LocalRemoteRefTarget<'a> {
 
 /// Represents the way the repo looks at a given time, just like how a Tree
 /// object represents how the file system looks at a given time.
-#[derive(ContentHash, PartialEq, Eq, Clone, Debug)]
+#[derive(allocative::Allocative, ContentHash, PartialEq, Eq, Clone, Debug)]
 pub struct View {
     /// All head commits. There should be at least one head commit.
     pub head_ids: HashSet<CommitId>,
@@ -279,7 +281,7 @@ impl View {
 }
 
 /// Represents the state of the remote repo.
-#[derive(ContentHash, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(allocative::Allocative, ContentHash, Clone, Debug, Default, Eq, PartialEq)]
 pub struct RemoteView {
     // TODO: Do we need to support tombstones for remote bookmarks? For example, if the bookmark
     // has been deleted locally and you pull from a remote, maybe it should make a difference
@@ -337,7 +339,7 @@ pub(crate) fn flatten_remote_refs(
         .kmerge_by(|(symbol1, _), (symbol2, _)| symbol1 < symbol2)
 }
 
-#[derive(Clone, ContentHash, Debug, Eq, PartialEq, serde::Serialize)]
+#[derive(allocative::Allocative, Clone, ContentHash, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct TimestampRange {
     // Could be aliased to Range<Timestamp> if needed.
     pub start: Timestamp,
@@ -356,7 +358,7 @@ pub struct TimestampRange {
 /// taken and it will be checked that the current head of the operation
 /// graph is unchanged. If the current head has changed, there has been
 /// concurrent operation.
-#[derive(ContentHash, PartialEq, Eq, Clone, Debug, serde::Serialize)]
+#[derive(allocative::Allocative, ContentHash, PartialEq, Eq, Clone, Debug, serde::Serialize)]
 pub struct Operation {
     #[serde(skip)] // TODO: should be exposed?
     pub view_id: ViewId,
@@ -413,7 +415,7 @@ impl Operation {
     }
 }
 
-#[derive(ContentHash, PartialEq, Eq, Clone, Debug, serde::Serialize)]
+#[derive(allocative::Allocative, ContentHash, PartialEq, Eq, Clone, Debug, serde::Serialize)]
 pub struct OperationMetadata {
     pub time: TimestampRange,
     // Whatever is useful to the user, such as exact command line call

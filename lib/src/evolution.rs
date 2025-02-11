@@ -42,7 +42,7 @@ use crate::repo::Repo as _;
 use crate::store::Store;
 
 /// Commit with predecessor information.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(allocative::Allocative, Clone, Debug, serde::Serialize)]
 pub struct CommitEvolutionEntry {
     /// Commit id and metadata.
     pub commit: Commit,

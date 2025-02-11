@@ -263,7 +263,7 @@ where
 }
 
 /// Granularity of hunks when merging files.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize)]
+#[derive(allocative::Allocative, Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FileMergeHunkLevel {
     /// Splits into line hunks.

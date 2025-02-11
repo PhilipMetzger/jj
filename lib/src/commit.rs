@@ -43,7 +43,7 @@ use crate::signing::SignResult;
 use crate::signing::Verification;
 use crate::store::Store;
 
-#[derive(Clone, serde::Serialize)]
+#[derive(allocative::Allocative, Clone, serde::Serialize)]
 pub struct Commit {
     #[serde(skip)]
     store: Arc<Store>,

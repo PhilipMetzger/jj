@@ -17,6 +17,8 @@ categories = ["version-control", "development-tools"]
 keywords = ["VCS", "DVCS", "SCM", "Git", "Mercurial"]
 
 [workspace.dependencies]
+anyhow = "1.0.97"
+allocative = "0.3.4"
 assert_cmd = "2.0.8"
 assert_matches = "1.5.0"
 async-trait = "0.1.88"
@@ -100,6 +102,7 @@ smallvec = { version = "1.15.1", features = [
     "serde",
     "union",
 ] }
+starlark = "0.13.0"
 strsim = "0.11.1"
 syn = "2.0.104"
 rustversion = "1.0.21"

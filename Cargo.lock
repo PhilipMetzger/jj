@@ -2709,6 +2709,7 @@ dependencies = [
 name = "jj-cli"
 version = "0.38.0"
 dependencies = [
+ "allocative",
  "ansi-to-tui",
  "assert_cmd",
  "assert_matches",
@@ -2736,6 +2737,7 @@ dependencies = [
  "itertools 0.14.0",
  "jj-cli",
  "jj-lib",
+ "jj-mahou",
  "jsonschema",
  "libc",
  "maplit",
@@ -2751,6 +2753,7 @@ dependencies = [
  "ratatui",
  "regex",
  "rpassword",
+ "rustyline 17.0.2",
  "sapling-renderdag",
  "sapling-streampager",
  "scm-record",
@@ -2758,6 +2761,8 @@ dependencies = [
  "serde_json",
  "shlex",
  "slab",
+ "starlark",
+ "strsim 0.11.1",
  "tempfile",
  "test-case",
  "testutils",

@@ -17,6 +17,8 @@ categories = ["version-control", "development-tools"]
 keywords = ["VCS", "DVCS", "SCM", "Git", "Mercurial"]
 
 [workspace.dependencies]
+anyhow = "1.0.97"
+allocative = "0.3.4"
 assert_cmd = "2.0.8"
 assert_matches = "1.5.0"
 async-trait = "0.1.88"
@@ -43,6 +45,7 @@ clru = "0.6.2"
 criterion = "0.5.1"
 crossterm = { version = "0.28", default-features = false, features = ["windows"] }
 datatest-stable = "0.3.2"
+derive_more = { version = "2.0.1", default-features = false, features = ["full"] }
 digest = "0.10.7"
 dunce = "1.0.5"
 erased-serde = "0.4.6"
@@ -100,6 +103,7 @@ smallvec = { version = "1.15.1", features = [
     "serde",
     "union",
 ] }
+starlark = "0.13.0"
 strsim = "0.11.1"
 syn = "2.0.104"
 rustversion = "1.0.21"

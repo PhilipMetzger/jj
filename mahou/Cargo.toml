@@ -1,0 +1,21 @@
+[package]
+name = "jj-mahou"
+description = "A Starlark based scripting language for the Jujutsu VCS"
+# This crate currently is internal only so don't publish it to crates.io yet.
+version = "0.1.0" # keep this is on 0.1
+
+edition = { workspace = true}
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+allocative = { workspace = true }
+derive_more = { workspace = true }
+thiserror = { workspace = true}
+itertools = { workspace = true }
+jj-lib = { workspace = true }
+rustyline = { workspace = true }
+starlark = { workspace = true }
+tokio = { workspace = true }

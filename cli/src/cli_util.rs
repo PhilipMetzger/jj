@@ -33,7 +33,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use bstr::ByteVec as _;
-use clap::ArgAction;
 use clap::ArgMatches;
 use clap::Command;
 use clap::FromArgMatches as _;
@@ -153,7 +152,8 @@ use jj_lib::workspace_operation_runner::WorkspaceOperationRunner;
 use jj_lib::workspace_operation_runner::WorkspaceOperationTransaction;
 pub use jj_lib::workspace_operation_runner::start_repo_transaction; // TODO: don't reexport it
 use jj_lib::workspace_util::WorkspaceEnvironment;
-use pollster::FutureExt;
+use pollster::FutureExt as _;
+use tracing::Instrument;
 use tracing::instrument;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::prelude::*;
@@ -1059,7 +1059,7 @@ impl WorkspaceCommandHelper {
         // Reload at current head to avoid creating divergent operations if another
         // process committed an operation while we were waiting for the lock.
         if self.working_copy_shared_with_git {
-            let repo = self.repo().clone();
+            let repo = self.operation_runner.repo().clone();
             let op_heads_store = repo.loader().op_heads_store();
             let op_heads = op_heads_store
                 .get_op_heads()
@@ -1109,13 +1109,13 @@ impl WorkspaceCommandHelper {
     /// Returns whether a snapshot was taken.
     #[instrument(skip_all)]
     pub async fn maybe_snapshot(&mut self, ui: &Ui) -> Result<bool, CommandError> {
-        let op_id_before = self.repo().op_id().clone();
+        let op_id_before = self.operation_runner.repo().op_id().clone();
         let stats = self
             .maybe_snapshot_impl(ui)
             .await
             .map_err(|err| err.into_command_error())?;
         print_snapshot_stats(ui, &stats, self.env().path_converter())?;
-        let op_id_after = self.repo().op_id();
+        let op_id_after = self.operation_runner.repo().op_id();
         Ok(op_id_before != *op_id_after)
     }
 
@@ -1210,20 +1210,39 @@ impl WorkspaceCommandHelper {
         &self.operation_runner.workspace()
     }
 
+    pub fn workspace_name(&self) -> &WorkspaceName {
+        self.operation_runner.workspace_name()
+    }
+
+    pub fn workspace_root(&self) -> &Path {
+        self.operation_runner.workspace_root()
+    }
+
     pub fn working_copy(&self) -> &dyn WorkingCopy {
-        self.operation_runner.workspace().working_copy()
+        self.operation_runner.working_copy()
+    }
+
+    pub fn get_wc_commit_id(&self) -> Option<&CommitId> {
+        self.operation_runner.get_wc_commit_id()
     }
 
     pub fn env(&self) -> &WorkspaceCommandEnvironment {
         &self.env
     }
 
+    pub fn repo(&self) -> &Arc<ReadonlyRepo> {
+        self.operation_runner.repo()
+    }
+
     pub fn unchecked_start_working_copy_mutation(
         &mut self,
     ) -> Result<(LockedWorkspace<'_>, Commit), CommandError> {
         self.check_working_copy_writable()?;
-        let wc_commit = if let Some(wc_commit_id) = self.get_wc_commit_id() {
-            self.repo().store().get_commit(wc_commit_id)?
+        let wc_commit = if let Some(wc_commit_id) = self.operation_runner.get_wc_commit_id() {
+            self.operation_runner
+                .repo()
+                .store()
+                .get_commit(wc_commit_id)?
         } else {
             return Err(user_error("Nothing checked out in this workspace"));
         };
@@ -1390,7 +1409,7 @@ to the current parents may contain changes from multiple commits.
                     .map(jj_lib::file_util::expand_home_path)?;
                 // The configured path is usually absolute, but if it's relative,
                 // the "git" command would read the file at the work-tree directory.
-                Some(self.workspace_root().join(path))
+                Some(self.operation_runner.workspace_root().join(path))
             } else {
                 xdg_config_home().map(|x| x.join("git").join("ignore"))
             }
@@ -1406,7 +1425,8 @@ to the current parents may contain changes from multiple commits.
         }
 
         let mut git_ignores = GitIgnoreFile::empty();
-        if let Ok(git_backend) = jj_lib::git::get_git_backend(self.repo().store()) {
+        if let Ok(git_backend) = jj_lib::git::get_git_backend(self.operation_runner.repo().store())
+        {
             let git_repo = git_backend.git_repo();
             if let Some(excludes_file_path) = get_excludes_file_path(&git_repo.config_snapshot()) {
                 git_ignores = git_ignores.chain_with_file("", excludes_file_path)?;
@@ -1424,7 +1444,7 @@ to the current parents may contain changes from multiple commits.
     /// Creates textual diff renderer of the specified `formats`.
     pub fn diff_renderer(&self, formats: Vec<DiffFormat>) -> DiffRenderer<'_> {
         DiffRenderer::new(
-            self.repo().as_ref(),
+            self.operation_runner.repo().as_ref(),
             self.path_converter(),
             self.env.conflict_marker_style(),
             formats,
@@ -1613,6 +1633,8 @@ to the current parents may contain changes from multiple commits.
         RevsetExpressionEvaluator::new(
             self.repo().as_ref(),
             self.env.revset_extensions().clone(),
+            self.operation_runner.repo().as_ref(),
+            self.env.command.revset_extensions().clone(),
             self.id_prefix_context(),
             expression,
         )
@@ -1682,8 +1704,10 @@ to the current parents may contain changes from multiple commits.
 
     /// Creates commit template language environment for this workspace.
     pub fn commit_template_language(&self) -> CommitTemplateLanguage<'_> {
-        self.env
-            .commit_template_language(self.repo().as_ref(), self.id_prefix_context())
+        self.env.commit_template_language(
+            self.operation_runner.repo().as_ref(),
+            self.id_prefix_context(),
+        )
     }
 
     /// Creates operation template language environment for this workspace.
@@ -1691,6 +1715,8 @@ to the current parents may contain changes from multiple commits.
         OperationTemplateLanguage::new(
             self.operation_runner.workspace().repo_loader(),
             Some(self.repo().op_id()),
+            self.workspace().repo_loader(),
+            Some(self.operation_runner.repo().op_id()),
             self.env.operation_template_extensions(),
         )
     }
@@ -1806,7 +1832,7 @@ to the current parents may contain changes from multiple commits.
         &mut self,
         ui: &Ui,
     ) -> Result<SnapshotStats, SnapshotWorkingCopyError> {
-        let workspace_name = self.workspace_name().to_owned();
+        let workspace_name = self.operation_runner.workspace_name().to_owned();
         let repo = self.repo().clone();
         let auto_tracking_matcher = self
             .auto_tracking_matcher(ui)
@@ -2032,7 +2058,7 @@ to the current parents may contain changes from multiple commits.
             return Ok(());
         };
         let old_view = old_repo.view();
-        let new_repo = self.repo().as_ref();
+        let new_repo = self.operation_runner.repo().as_ref();
         let new_view = new_repo.view();
 
         let workspace_name = self.workspace_name();
@@ -2237,7 +2263,12 @@ to the current parents may contain changes from multiple commits.
 
         let mut advanceable_bookmarks = Vec::new();
         for from_commit in from {
-            for (name, _) in self.repo().view().local_bookmarks_for_commit(from_commit) {
+            for (name, _) in self
+                .operation_runner
+                .repo()
+                .view()
+                .local_bookmarks_for_commit(from_commit)
+            {
                 if ab_matcher.is_match(name.as_str()) {
                     advanceable_bookmarks.push(AdvanceableBookmark {
                         name: name.to_owned(),
@@ -3105,7 +3136,7 @@ pub async fn compute_commit_location(
             (None, None, Some(before_commit_ids)) => {
                 let before_commits: Vec<_> = before_commit_ids
                     .iter()
-                    .map(|id| workspace_command.repo().store().get_commit(id))
+                    .map(|id| workspace_command.user_repo.repo().store().get_commit(id))
                     .try_collect()?;
                 // Not using `RevsetExpression::parents` here to persist the order of parents
                 // specified in `before_commits`.
@@ -3131,7 +3162,7 @@ pub async fn compute_commit_location(
             .check_rewritable(new_child_ids.iter())
             .await?;
         ensure_no_commit_loop(
-            workspace_command.repo().as_ref(),
+            workspace_command.user_repo.repo().as_ref(),
             &RevsetExpression::commits(new_child_ids.clone()),
             &RevsetExpression::commits(new_parent_ids.clone()),
             commit_type,

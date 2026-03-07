@@ -42,7 +42,8 @@ impl ReadonlyUserRepo {
         &self.repo
     }
 
-    /// Get the associated `IdPrefixContext` makes no guarantees about being initialized.
+    /// Get the associated `IdPrefixContext` makes no guarantees about being
+    /// initialized.
     pub fn id_prefix_context(&self) -> &OnceCell<IdPrefixContext> {
         &self.id_prefix_context
     }

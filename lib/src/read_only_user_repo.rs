@@ -1,8 +1,6 @@
 // Copyright 2026 The Jujutsu Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
 //
 // https://www.apache.org/licenses/LICENSE-2.0
 //
@@ -14,9 +12,9 @@
 
 //! Contains the `ReadOnlyUserRepo`.
 
+use std::cell::OnceCell;
+use std::mem;
 use std::sync::Arc;
-
-use once_cell::sync::OnceCell;
 
 use crate::id_prefix::IdPrefixContext;
 use crate::repo::ReadonlyRepo;
@@ -25,11 +23,9 @@ use crate::repo::ReadonlyRepo;
 /// data is lazily loaded.
 pub struct ReadonlyUserRepo {
     /// The `ReadOnlyRepo` we currently work on.
-    // TODO: make private
-    pub repo: Arc<ReadonlyRepo>,
+    repo: Arc<ReadonlyRepo>,
     /// The associated `IdPrefixContext`
-    // TODO: make private
-    pub id_prefix_context: OnceCell<IdPrefixContext>,
+    id_prefix_context: OnceCell<IdPrefixContext>,
 }
 
 impl ReadonlyUserRepo {
@@ -39,5 +35,21 @@ impl ReadonlyUserRepo {
             repo,
             id_prefix_context: OnceCell::new(),
         }
+    }
+
+    /// Get the associated `ReadonlyRepo`.
+    pub fn repo(&self) -> &Arc<ReadonlyRepo> {
+        &self.repo
+    }
+
+    /// Get the associated `IdPrefixContext` makes no guarantees about being initialized.
+    pub fn id_prefix_context(&self) -> &OnceCell<IdPrefixContext> {
+        &self.id_prefix_context
+    }
+
+    /// Take the `IdPrefixContext` from the `ReadonlyUserRepo`.
+    pub fn take_id_prefix_context(&mut self) -> OnceCell<IdPrefixContext> {
+        let id_context = mem::take(&mut self.id_prefix_context);
+        id_context
     }
 }

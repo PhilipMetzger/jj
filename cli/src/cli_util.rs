@@ -146,6 +146,7 @@ use jj_lib::workspace::WorkspaceLoader;
 use jj_lib::workspace::WorkspaceLoaderFactory;
 use jj_lib::workspace::default_working_copy_factories;
 use jj_lib::workspace::get_working_copy_factory;
+use jj_lib::workspace_operation_environment::WorkspaceCommandEnvironment;
 use pollster::FutureExt as _;
 use tracing::instrument;
 use tracing_chrome::ChromeLayerBuilder;
@@ -810,17 +811,10 @@ fn load_advance_bookmarks_matcher(
 /// Metadata and configuration loaded for a specific workspace.
 pub struct WorkspaceCommandEnvironment {
     command: CommandHelper,
-    settings: UserSettings,
-    fileset_aliases_map: FilesetAliasesMap,
-    revset_aliases_map: RevsetAliasesMap,
+    inner: WorkspaceOperationEnvironment,
     template_aliases_map: TemplateAliasesMap,
     default_ignored_remote: Option<&'static RemoteName>,
     revsets_use_glob_by_default: bool,
-    path_converter: RepoPathUiConverter,
-    workspace_name: WorkspaceNameBuf,
-    immutable_heads_expression: Arc<UserRevsetExpression>,
-    short_prefixes_expression: Option<Arc<UserRevsetExpression>>,
-    conflict_marker_style: ConflictMarkerStyle,
 }
 
 impl WorkspaceCommandEnvironment {
@@ -835,19 +829,22 @@ impl WorkspaceCommandEnvironment {
             cwd: command.cwd().to_owned(),
             base: workspace.workspace_root().to_owned(),
         };
-        let mut env = Self {
-            command: command.clone(),
-            settings: settings.clone(),
+        let inner = WorkspaceOperationEnvironment::new(
+            settings,
             fileset_aliases_map,
             revset_aliases_map,
+            path_converter,
+            workspace.workspace_name().to_owned(),
+            RevsetExpression::root(),
+            None,
+            settings.get("ui.conflict-marker-style")?,
+        );
+        let mut env = Self {
+            command: command.clone(),
+            inner,
             template_aliases_map,
             default_ignored_remote,
             revsets_use_glob_by_default: settings.get("ui.revsets-use-glob-by-default")?,
-            path_converter,
-            workspace_name: workspace.workspace_name().to_owned(),
-            immutable_heads_expression: RevsetExpression::root(),
-            short_prefixes_expression: None,
-            conflict_marker_style: settings.get("ui.conflict-marker-style")?,
         };
         env.reload_revset_expressions(ui)?;
         Ok(env)

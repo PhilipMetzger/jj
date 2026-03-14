@@ -52,6 +52,7 @@ use jj_lib::revset::RevsetEvaluationError;
 use jj_lib::revset::RevsetParseError;
 use jj_lib::revset::RevsetParseErrorKind;
 use jj_lib::revset::RevsetResolutionError;
+use jj_lib::revset_util::UserRevsetEvaluationError;
 use jj_lib::secure_config::SecureConfigError;
 use jj_lib::str_util::StringPatternParseError;
 use jj_lib::trailer::TrailerParseError;
@@ -435,6 +436,15 @@ impl From<WalkPredecessorsError> for UserError {
 impl From<TrailerParseError> for UserError {
     fn from(err: TrailerParseError) -> Self {
         user_error(err)
+    }
+}
+
+impl From<UserRevsetEvaluationError> for UserError {
+    fn from(err: UserRevsetEvaluationError) -> Self {
+        match err {
+            UserRevsetEvaluationError::Resolution(err) => err.into(),
+            UserRevsetEvaluationError::Evaluation(err) => err.into(),
+        }
     }
 }
 

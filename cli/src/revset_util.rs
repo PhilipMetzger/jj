@@ -34,7 +34,6 @@ use jj_lib::revset::RevsetParseError;
 use jj_lib::revset::RevsetResolutionError;
 use jj_lib::revset::SymbolResolver;
 use jj_lib::revset_util::RevsetExpressionEvaluator;
-pub use jj_lib::revset_util::try_resolve_trunk_alias;
 use jj_lib::settings::RemoteSettingsMap;
 use jj_lib::str_util::StringExpression;
 use jj_lib::str_util::StringMatcher;
@@ -48,6 +47,28 @@ use crate::command_error::user_error;
 use crate::command_error::user_error_with_message;
 use crate::templater::TemplateRenderer;
 use crate::ui::Ui;
+
+/// Parses and resolves `trunk()` alias to detect name resolution error in it.
+///
+/// Returns `None` if the alias couldn't be parsed. Returns `Err` if the parsed
+/// expression had name resolution error.
+pub fn try_resolve_trunk_alias(
+    repo: &dyn Repo,
+    context: &RevsetParseContext,
+) -> Result<Option<Arc<ResolvedRevsetExpression>>, RevsetResolutionError> {
+    let (_, _, revset_str) = context
+        .aliases_map
+        .get_function("trunk", 0)
+        .expect("trunk() should be defined by default");
+    let Ok(expression) = revset::parse(&mut RevsetDiagnostics::new(), revset_str, context) else {
+        return Ok(None);
+    };
+    // Not using IdPrefixContext since trunk() revset shouldn't contain short
+    // prefixes.
+    let symbol_resolver = SymbolResolver::new(repo, context.extensions.symbol_resolvers());
+    let resolved = expression.resolve_user_expression(repo, &symbol_resolver)?;
+    Ok(Some(resolved))
+}
 
 pub(super) async fn evaluate_revset_to_single_commit<'a>(
     revision_str: &str,

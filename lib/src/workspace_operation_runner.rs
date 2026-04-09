@@ -946,24 +946,23 @@ impl WorkspaceOperationTransaction {
     }
 
     /// Check out the given `Commit`.
-    // TODO: should be async
-    pub fn check_out(
+    pub async fn check_out(
         &mut self,
         commit: &Commit,
         name: &WorkspaceName,
     ) -> Result<Commit, CheckOutCommitError> {
         self.id_prefix_context.take(); // invalidate
-        self.tx
-            .repo_mut()
-            .check_out(name.to_owned(), commit)
-            .block_on()
+        self.tx.repo_mut().check_out(name.to_owned(), commit).await
     }
 
     /// Edit the given `Commit`.
-    // TODO: should be async
-    pub fn edit(&mut self, commit: &Commit, name: &WorkspaceName) -> Result<(), EditCommitError> {
+    pub async fn edit(
+        &mut self,
+        commit: &Commit,
+        name: &WorkspaceName,
+    ) -> Result<(), EditCommitError> {
         self.id_prefix_context.take(); // invalidate
-        self.tx.repo_mut().edit(name.to_owned(), commit).block_on()
+        self.tx.repo_mut().edit(name.to_owned(), commit).await
     }
 
     /// Returns the wrapped [`Transaction`] for circumstances where

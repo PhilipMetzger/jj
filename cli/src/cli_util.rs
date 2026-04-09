@@ -2351,12 +2351,12 @@ impl WorkspaceCommandTransaction<'_> {
 
     pub fn check_out(&mut self, commit: &Commit) -> Result<Commit, CheckOutCommitError> {
         let name = self.helper.workspace_name();
-        self.inner.check_out(&commit, name)
+        self.inner.check_out(&commit, name).block_on()
     }
 
     pub fn edit(&mut self, commit: &Commit) -> Result<(), EditCommitError> {
         let name = self.helper.workspace_name();
-        self.inner.edit(&commit, name)
+        self.inner.edit(&commit, name).block_on()
     }
 
     pub fn format_commit_summary(&self, commit: &Commit) -> String {

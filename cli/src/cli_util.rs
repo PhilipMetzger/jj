@@ -2383,9 +2383,12 @@ to the current parents may contain changes from multiple commits.
         // `jj new <conflicted commit>` doesn't result in a message about new conflicts.
         let conflicts = RevsetExpression::filter(RevsetFilterPredicate::HasConflict)
             .filtered(RevsetFilterPredicate::File(FilesetExpression::all()));
+        let divergents = RevsetExpression::divergent();
         let removed_conflicts_expr = new_heads.range(&old_heads).intersection(&conflicts);
         let added_conflicts_expr = old_heads.range(&new_heads).intersection(&conflicts);
 
+        let removed_divergents_expr = new_heads.range(&old_heads).intersection(&divergents);
+        let added_divergents_expr = old_heads.range(&new_heads).intersection(&divergents);
         let get_commits =
             async |expr: Arc<ResolvedRevsetExpression>| -> Result<Vec<Commit>, CommandError> {
                 let commits = expr
@@ -2398,6 +2401,8 @@ to the current parents may contain changes from multiple commits.
             };
         let removed_conflict_commits = get_commits(removed_conflicts_expr).await?;
         let added_conflict_commits = get_commits(added_conflicts_expr).await?;
+        let removed_divergent_commits = get_commits(removed_divergents_expr).await?;
+        let added_divergent_commits = get_commits(added_divergents_expr).await?;
 
         fn commits_by_change_id(commits: &[Commit]) -> IndexMap<&ChangeId, Vec<&Commit>> {
             let mut result: IndexMap<&ChangeId, Vec<&Commit>> = IndexMap::new();
@@ -2414,6 +2419,8 @@ to the current parents may contain changes from multiple commits.
         let mut new_conflicts_by_change_id = added_conflicts_by_change_id.clone();
         new_conflicts_by_change_id
             .retain(|change_id, _commits| !removed_conflicts_by_change_id.contains_key(change_id));
+        let solved_divergence_by_change_id = commits_by_change_id(&removed_divergent_commits);
+        let unresolved_divergence_by_change_id = commits_by_change_id(&added_divergent_commits);
 
         // TODO: Also report new divergence and maybe resolved divergence
         if !resolved_conflicts_by_change_id.is_empty() {

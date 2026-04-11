@@ -646,6 +646,11 @@ fn test_status_filtered_untracked() {
 }
 
 #[test]
+fn test_status_divergent() {
+    // TODO
+}
+
+#[test]
 fn test_status_no_working_copy() {
     let test_env = TestEnvironment::default();
     test_env.run_jj_in(".", ["git", "init", "repo"]).success();

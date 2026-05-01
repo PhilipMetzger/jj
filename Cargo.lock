@@ -2509,6 +2509,9 @@ dependencies = [
 [[package]]
 name = "jj-core"
 version = "0.40.0"
+dependencies = [
+ "prost",
+]
 
 [[package]]
 name = "jj-lib"
@@ -2536,6 +2539,7 @@ dependencies = [
  "insta",
  "interim",
  "itertools 0.14.0",
+ "jj-core",
  "jj-lib-proc-macros",
  "maplit",
  "nix 0.31.3",

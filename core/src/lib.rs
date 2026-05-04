@@ -31,7 +31,9 @@ pub mod fileset_parser;
 pub mod hex_util;
 pub mod index;
 pub mod matchers;
+pub mod matchers;
 pub mod merge;
+pub mod merged_tree;
 pub mod object_id;
 pub mod op_store;
 pub mod operation;
@@ -39,9 +41,9 @@ pub mod protos;
 pub mod ref_name;
 pub mod repo_path;
 pub mod revset;
-pub mod revset_parser;
 pub mod signing;
 pub mod store;
+pub mod tree;
 pub mod workspace_store;
 
 #[cfg(test)]

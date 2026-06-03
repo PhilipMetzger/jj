@@ -2509,9 +2509,34 @@ dependencies = [
 
 [[package]]
 name = "jj-core"
-version = "0.40.0"
+version = "0.41.0"
 dependencies = [
+ "blake2",
+ "chrono",
+ "clru",
+ "digest",
+ "etcetera",
+ "futures 0.3.32",
+ "itertools 0.14.0",
+ "jj-core-proc-macros",
+ "pollster",
  "prost",
+ "ref-cast",
+ "serde",
+ "smallvec",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "jj-core-proc-macros"
+version = "0.41.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2541,7 +2566,7 @@ dependencies = [
  "interim",
  "itertools 0.14.0",
  "jj-core",
- "jj-lib-proc-macros",
+ "jj-core-proc-macros",
  "maplit",
  "nix 0.31.3",
  "num_cpus",

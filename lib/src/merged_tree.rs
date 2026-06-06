@@ -38,7 +38,6 @@ use crate::backend::BackendResult;
 use crate::backend::CopyId;
 use crate::backend::MergedTreeVal;
 use crate::backend::MergedTreeValue;
-use crate::backend::MergedTreeValueExt as _;
 use crate::backend::TreeId;
 use crate::backend::TreeValue;
 use crate::conflict_labels::ConflictLabels;

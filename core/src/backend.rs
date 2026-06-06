@@ -69,92 +69,12 @@ id_type!(
     pub CopyId { hex() }
 );
 
-impl ChangeId {
-    /// Parses the given "reverse" hex string into a `ChangeId`.
-    pub fn try_from_reverse_hex(hex: impl AsRef<[u8]>) -> Option<Self> {
-        hex_util::decode_reverse_hex(hex).map(Self)
-    }
-
-    /// Returns the hex string representation of this ID, which uses `z-k`
-    /// "digits" instead of `0-9a-f`.
-    pub fn reverse_hex(&self) -> String {
-        hex_util::encode_reverse_hex(&self.0)
-    }
-}
-
 impl CopyId {
     /// Returns a placeholder copy id to be used when we don't have a real copy
     /// id yet.
     // TODO: Delete this
     pub fn placeholder() -> Self {
         Self::new(vec![])
-    }
-}
-
-/// Error that may occur when converting a `Timestamp` to a `Datetime``.
-#[derive(Debug, Error)]
-#[error("Out-of-range date")]
-pub struct TimestampOutOfRange;
-
-/// The number of milliseconds since the Unix epoch.
-#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
-pub struct MillisSinceEpoch(pub i64);
-
-/// A timestamp with millisecond precision and a time zone offset.
-#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
-pub struct Timestamp {
-    /// The number of milliseconds since the Unix epoch.
-    pub timestamp: MillisSinceEpoch,
-    /// Timezone offset in minutes
-    pub tz_offset: i32,
-}
-
-impl Timestamp {
-    /// Returns the current local time as a `Timestamp`.
-    pub fn now() -> Self {
-        Self::from_datetime(chrono::offset::Local::now())
-    }
-
-    /// Creates a `Timestamp` from the given `DateTime`.
-    pub fn from_datetime<Tz: chrono::TimeZone<Offset = chrono::offset::FixedOffset>>(
-        datetime: chrono::DateTime<Tz>,
-    ) -> Self {
-        Self {
-            timestamp: MillisSinceEpoch(datetime.timestamp_millis()),
-            tz_offset: datetime.offset().local_minus_utc() / 60,
-        }
-    }
-
-    /// Converts this `Timestamp` to a `DateTime`.
-    pub fn to_datetime(
-        &self,
-    ) -> Result<chrono::DateTime<chrono::FixedOffset>, TimestampOutOfRange> {
-        let utc = match chrono::Utc.timestamp_opt(
-            self.timestamp.0.div_euclid(1000),
-            (self.timestamp.0.rem_euclid(1000)) as u32 * 1000000,
-        ) {
-            chrono::LocalResult::None => {
-                return Err(TimestampOutOfRange);
-            }
-            chrono::LocalResult::Single(x) => x,
-            chrono::LocalResult::Ambiguous(y, _z) => y,
-        };
-
-        Ok(utc.with_timezone(
-            &chrono::FixedOffset::east_opt(self.tz_offset * 60)
-                .unwrap_or_else(|| chrono::FixedOffset::east_opt(0).unwrap()),
-        ))
-    }
-}
-
-impl serde::Serialize for Timestamp {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // TODO: test is_human_readable() to use raw format?
-        let t = self.to_datetime().map_err(serde::ser::Error::custom)?;
-        t.serialize(serializer)
     }
 }
 
@@ -273,6 +193,110 @@ pub struct RelatedCopy {
     pub id: CopyId,
     /// The copy history.
     pub history: CopyHistory,
+}
+
+/// Error that may occur when converting a `Timestamp` to a `Datetime``.
+#[derive(Debug, Error)]
+#[error("Out-of-range date")]
+pub struct TimestampOutOfRange;
+
+/// The number of milliseconds since the Unix epoch.
+#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+pub struct MillisSinceEpoch(pub i64);
+
+/// A timestamp with millisecond precision and a time zone offset.
+#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+pub struct Timestamp {
+    /// The number of milliseconds since the Unix epoch.
+    pub timestamp: MillisSinceEpoch,
+    /// Timezone offset in minutes
+    pub tz_offset: i32,
+}
+
+impl Timestamp {
+    /// Returns the current local time as a `Timestamp`.
+    pub fn now() -> Self {
+        Self::from_datetime(chrono::offset::Local::now())
+    }
+
+    /// Creates a `Timestamp` from the given `DateTime`.
+    pub fn from_datetime<Tz: chrono::TimeZone<Offset = chrono::offset::FixedOffset>>(
+        datetime: chrono::DateTime<Tz>,
+    ) -> Self {
+        Self {
+            timestamp: MillisSinceEpoch(datetime.timestamp_millis()),
+            tz_offset: datetime.offset().local_minus_utc() / 60,
+        }
+    }
+
+    /// Converts this `Timestamp` to a `DateTime`.
+    pub fn to_datetime(
+        &self,
+    ) -> Result<chrono::DateTime<chrono::FixedOffset>, TimestampOutOfRange> {
+        let utc = match chrono::Utc.timestamp_opt(
+            self.timestamp.0.div_euclid(1000),
+            (self.timestamp.0.rem_euclid(1000)) as u32 * 1000000,
+        ) {
+            chrono::LocalResult::None => {
+                return Err(TimestampOutOfRange);
+            }
+            chrono::LocalResult::Single(x) => x,
+            chrono::LocalResult::Ambiguous(y, _z) => y,
+        };
+
+        Ok(utc.with_timezone(
+            &chrono::FixedOffset::east_opt(self.tz_offset * 60)
+                .unwrap_or_else(|| chrono::FixedOffset::east_opt(0).unwrap()),
+        ))
+    }
+}
+
+impl serde::Serialize for Timestamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // TODO: test is_human_readable() to use raw format?
+        let t = self.to_datetime().map_err(serde::ser::Error::custom)?;
+        t.serialize(serializer)
+    }
+}
+
+impl ChangeId {
+    /// Parses the given "reverse" hex string into a `ChangeId`.
+    pub fn try_from_reverse_hex(hex: impl AsRef<[u8]>) -> Option<Self> {
+        hex_util::decode_reverse_hex(hex).map(Self)
+    }
+
+    /// Returns the hex string representation of this ID, which uses `z-k`
+    /// "digits" instead of `0-9a-f`.
+    pub fn reverse_hex(&self) -> String {
+        hex_util::encode_reverse_hex(&self.0)
+    }
+}
+
+/// Creates a root commit object.
+pub fn make_root_commit(root_change_id: ChangeId, empty_tree_id: TreeId) -> Commit {
+    let timestamp = Timestamp {
+        timestamp: MillisSinceEpoch(0),
+        tz_offset: 0,
+    };
+    let signature = Signature {
+        name: String::new(),
+        email: String::new(),
+        timestamp,
+    };
+    Commit {
+        parents: vec![],
+        predecessors: vec![],
+        root_tree: Merge::resolved(empty_tree_id),
+        conflict_labels: Merge::resolved(String::new()),
+        change_id: root_change_id,
+        description: String::new(),
+        author: signature.clone(),
+        committer: signature,
+        secure_sig: None,
+    }
 }
 
 /// Error that may occur during backend initialization.
@@ -431,45 +455,12 @@ pub type MergedTreeVal<'a> = Merge<Option<&'a TreeValue>>;
 /// tree, it shouldn't be.
 pub type MergedTreeValue = Merge<Option<TreeValue>>;
 
-/// Extension methods for tree-value merges such as [`MergedTreeValue`] and
-/// [`MergedTreeVal`].
-pub trait MergedTreeValueExt {
-    /// Whether this merge should be recursed into when doing directory walks.
-    fn is_tree(&self) -> bool;
-
-    /// Whether this merge is present and not a tree
-    fn is_file_like(&self) -> bool;
-
-    /// If this merge contains only files or absent entries, returns a merge of
-    /// the `FileId`s. The executable bits and copy IDs will be ignored. Use
-    /// `Merge::with_new_file_ids()` to produce a new merge with the original
-    /// executable bits preserved.
-    fn to_file_merge(&self) -> Option<Merge<Option<FileId>>>;
-
-    /// If this merge contains only files or absent entries, returns a merge of
-    /// the files' executable bits.
-    fn to_executable_merge(&self) -> Option<Merge<Option<bool>>>;
-
-    /// If this merge contains only files or absent entries, returns a merge of
-    /// the files' copy IDs.
-    fn to_copy_id_merge(&self) -> Option<Merge<Option<CopyId>>>;
-
-    /// Creates a new merge with the file ids from the given merge. In other
-    /// words, the executable bits and copy IDs from `self` will be preserved.
-    ///
-    /// The given `file_ids` should have the same shape as `self`. Only the
-    /// `FileId` values may differ.
-    fn with_new_file_ids(&self, file_ids: &Merge<Option<FileId>>) -> Merge<Option<TreeValue>>;
-
-    /// Give a summary description of the conflict's "removes" and "adds"
-    fn describe(&self, labels: &ConflictLabels) -> String;
-}
-
-impl<T> MergedTreeValueExt for Merge<Option<T>>
+impl<T> Merge<Option<T>>
 where
     T: Borrow<TreeValue>,
 {
-    fn is_tree(&self) -> bool {
+    /// Whether this merge should be recursed into when doing directory walks.
+    pub fn is_tree(&self) -> bool {
         self.is_present()
             && self.iter().all(|value| {
                 matches!(
@@ -479,11 +470,16 @@ where
             })
     }
 
-    fn is_file_like(&self) -> bool {
+    /// Whether this merge is present and not a tree
+    pub fn is_file_like(&self) -> bool {
         self.is_present() && !self.is_tree()
     }
 
-    fn to_file_merge(&self) -> Option<Merge<Option<FileId>>> {
+    /// If this merge contains only files or absent entries, returns a merge of
+    /// the `FileId`s. The executable bits and copy IDs will be ignored. Use
+    /// `Merge::with_new_file_ids()` to produce a new merge with the original
+    /// executable bits preserved.
+    pub fn to_file_merge(&self) -> Option<Merge<Option<FileId>>> {
         let file_ids = self
             .try_map(|term| match borrow_tree_value(term.as_ref()) {
                 None => Ok(None),
@@ -499,7 +495,9 @@ where
         Some(file_ids)
     }
 
-    fn to_executable_merge(&self) -> Option<Merge<Option<bool>>> {
+    /// If this merge contains only files or absent entries, returns a merge of
+    /// the files' executable bits.
+    pub fn to_executable_merge(&self) -> Option<Merge<Option<bool>>> {
         self.try_map(|term| match borrow_tree_value(term.as_ref()) {
             None => Ok(None),
             Some(TreeValue::File {
@@ -512,7 +510,9 @@ where
         .ok()
     }
 
-    fn to_copy_id_merge(&self) -> Option<Merge<Option<CopyId>>> {
+    /// If this merge contains only files or absent entries, returns a merge of
+    /// the files' copy IDs.
+    pub fn to_copy_id_merge(&self) -> Option<Merge<Option<CopyId>>> {
         self.try_map(|term| match borrow_tree_value(term.as_ref()) {
             None => Ok(None),
             Some(TreeValue::File {
@@ -525,7 +525,12 @@ where
         .ok()
     }
 
-    fn with_new_file_ids(&self, file_ids: &Merge<Option<FileId>>) -> Merge<Option<TreeValue>> {
+    /// Creates a new merge with the file ids from the given merge. In other
+    /// words, the executable bits and copy IDs from `self` will be preserved.
+    ///
+    /// The given `file_ids` should have the same shape as `self`. Only the
+    /// `FileId` values may differ.
+    pub fn with_new_file_ids(&self, file_ids: &Merge<Option<FileId>>) -> Merge<Option<TreeValue>> {
         assert_eq!(self.num_sides(), file_ids.num_sides());
         let values: SmallVec<_> = zip(self, file_ids.iter().cloned())
             .map(
@@ -558,7 +563,8 @@ where
         Merge::from_vec(values)
     }
 
-    fn describe(&self, labels: &ConflictLabels) -> String {
+    /// Give a summary description of the conflict's "removes" and "adds"
+    pub fn describe(&self, labels: &ConflictLabels) -> String {
         let mut buf = String::new();
         writeln!(buf, "Conflict:").unwrap();
         for (term, label) in self
@@ -587,9 +593,8 @@ where
     }
 }
 
-pub(crate) fn borrow_tree_value<T: Borrow<TreeValue> + ?Sized>(
-    term: Option<&T>,
-) -> Option<&TreeValue> {
+/// Borrow the `TreeValue` from the Option if it exists.
+pub fn borrow_tree_value<T: Borrow<TreeValue> + ?Sized>(term: Option<&T>) -> Option<&TreeValue> {
     term.map(|value| value.borrow())
 }
 
@@ -715,30 +720,6 @@ impl Tree {
     }
 }
 
-/// Creates a root commit object.
-pub fn make_root_commit(root_change_id: ChangeId, empty_tree_id: TreeId) -> Commit {
-    let timestamp = Timestamp {
-        timestamp: MillisSinceEpoch(0),
-        tz_offset: 0,
-    };
-    let signature = Signature {
-        name: String::new(),
-        email: String::new(),
-        timestamp,
-    };
-    Commit {
-        parents: vec![],
-        predecessors: vec![],
-        root_tree: Merge::resolved(empty_tree_id),
-        conflict_labels: Merge::resolved(String::new()),
-        change_id: root_change_id,
-        description: String::new(),
-        author: signature.clone(),
-        committer: signature,
-        secure_sig: None,
-    }
-}
-
 /// Defines the interface for commit backends.
 #[async_trait]
 pub trait Backend: Any + Send + Sync + Debug {
@@ -815,7 +796,7 @@ pub trait Backend: Any + Send + Sync + Debug {
     /// Find all copy histories that are related to the specified one. This is
     /// defined as those that are ancestors of the given specified one, plus
     /// all descendants of those ancestors. Children must be returned before
-    /// parents, and the order should be deterministic.
+    /// parents.
     ///
     /// It is valid (but wasteful) to include other copy histories, such as
     /// siblings, or even completely unrelated copy histories.

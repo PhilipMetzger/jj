@@ -34,7 +34,6 @@ use crate::backend::BackendError;
 use crate::backend::BackendResult;
 use crate::backend::MergedTreeVal;
 use crate::backend::MergedTreeValue;
-use crate::backend::MergedTreeValueExt as _;
 use crate::backend::TreeId;
 use crate::backend::TreeValue;
 use crate::config::ConfigGetError;

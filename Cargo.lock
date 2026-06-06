@@ -2688,8 +2688,11 @@ name = "jj-core"
 version = "0.45.1"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "blake2",
  "bstr",
+ "chrono",
+ "clru",
  "criterion",
  "digest 0.10.7",
  "either",

@@ -28,7 +28,6 @@ use pollster::FutureExt as _;
 use crate::backend;
 use crate::backend::BackendResult;
 use crate::backend::MergedTreeVal;
-use crate::backend::MergedTreeValueExt as _;
 use crate::backend::TreeEntriesNonRecursiveIterator;
 use crate::backend::TreeId;
 use crate::backend::TreeValue;

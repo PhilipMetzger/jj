@@ -58,6 +58,7 @@ pub mod time_util;
 pub mod tree;
 pub mod view;
 pub mod working_copy;
+pub mod workspace;
 pub mod workspace_store;
 
 #[cfg(test)]

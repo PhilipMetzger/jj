@@ -67,6 +67,7 @@ pub mod tree;
 pub mod tree_merge;
 pub mod view;
 pub mod working_copy;
+pub mod workspace;
 pub mod workspace_store;
 
 #[cfg(test)]

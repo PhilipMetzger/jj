@@ -38,6 +38,7 @@ pub mod repo_path;
 pub mod revset;
 pub mod revset_parser;
 pub mod signing;
+pub mod workspace_store;
 
 #[cfg(test)]
 mod tests {

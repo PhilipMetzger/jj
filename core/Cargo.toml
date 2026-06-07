@@ -21,16 +21,22 @@ etcetera = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jj-core-proc-macros = { workspace = true }
-prost = { workspace = true }
+pest = { workspace = true }
+pest_derive = { workspace = true }
 pollster = { workspace = true }
+prost = { workspace = true }
 ref-cast = { workspace = true }
 serde = { workspace = true }
 smallvec = { workspace = true }
+strsim = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+assert_matches = { workspace = true }
+eyre = { workspace = true }
 
 [lints]
 workspace = true

@@ -25,21 +25,24 @@ extern crate self as jj_core;
 pub mod content_hash;
 
 pub mod backend;
+pub mod dsl_util;
 pub mod file_util;
 pub mod hex_util;
 pub mod matchers;
 pub mod object_id;
 pub mod protos;
+pub mod ref_name;
 pub mod repo_path;
+pub mod revset;
+pub mod revset_parser;
 pub mod signing;
 
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
 
-    // TODO: is this needed?
     // Copied from `testutils::TestResult` to remove dependency cycle.
-    // pub type TestResult<T = ()> = eyre::Result<T>;
+    pub type TestResult<T = ()> = eyre::Result<T>;
 
     /// Unlike `testutils::new_temp_dir()`, this function doesn't set up
     /// hermetic Git environment.

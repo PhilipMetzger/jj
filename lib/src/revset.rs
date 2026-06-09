@@ -28,6 +28,11 @@ use futures::Stream;
 use futures::StreamExt as _;
 use futures::stream::LocalBoxStream;
 use itertools::Itertools as _;
+pub use jj_core::revset::ResolvedRevsetExpression;
+pub use jj_core::revset::Revset;
+pub use jj_core::revset::RevsetContainingFn;
+pub use jj_core::revset::RevsetEvaluationError;
+pub use jj_core::revset::UserRevsetExpression;
 pub use jj_core::revset::format_remote_symbol;
 pub use jj_core::revset::format_string;
 pub use jj_core::revset::format_symbol;
@@ -117,61 +122,11 @@ pub enum RevsetResolutionError {
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
-/// Error occurred during revset evaluation.
-#[derive(Debug, Error)]
-pub enum RevsetEvaluationError {
-    #[error("Unexpected error from commit backend")]
-    Backend(#[from] BackendError),
-    #[error(transparent)]
-    Other(Box<dyn std::error::Error + Send + Sync>),
-}
-
-impl RevsetEvaluationError {
-    // TODO: Create a higher-level error instead of putting non-BackendErrors in a
-    // BackendError
-    pub fn into_backend_error(self) -> BackendError {
-        match self {
-            Self::Backend(err) => err,
-            Self::Other(err) => BackendError::Other(err),
-        }
-    }
-}
-
 // assumes index has less than u64::MAX entries.
 pub const GENERATION_RANGE_FULL: Range<u64> = 0..u64::MAX;
 pub const GENERATION_RANGE_EMPTY: Range<u64> = 0..0;
 
 pub const PARENTS_RANGE_FULL: Range<u32> = 0..u32::MAX;
-
-/// Symbol or function to be resolved to `CommitId`s.
-#[derive(Clone, Debug)]
-pub enum RevsetCommitRef {
-    WorkingCopy(WorkspaceNameBuf),
-    WorkingCopies,
-    Symbol(String),
-    RemoteSymbol(RemoteRefSymbolBuf),
-    ChangeId(HexPrefix),
-    CommitId(HexPrefix),
-    Bookmarks(StringExpression),
-    RemoteBookmarks {
-        symbol: RemoteRefSymbolExpression,
-        remote_ref_state: Option<RemoteRefState>,
-    },
-    Tags(StringExpression),
-    RemoteTags {
-        symbol: RemoteRefSymbolExpression,
-        remote_ref_state: Option<RemoteRefState>,
-    },
-}
-
-/// String expressions to match `name@remote` bookmarks/tags.
-#[derive(Clone, Debug)]
-pub struct RemoteRefSymbolExpression {
-    /// Matches local name.
-    pub name: StringExpression,
-    /// Matches remote name.
-    pub remote: StringExpression,
-}
 
 /// A custom revset filter expression, defined by an extension.
 pub trait RevsetFilterExtension: std::fmt::Debug + Any + Send + Sync {
@@ -228,39 +183,6 @@ pub enum RevsetFilterPredicate {
     /// Custom predicates provided by extensions
     Extension(Arc<dyn RevsetFilterExtension>),
 }
-
-mod private {
-    /// Defines [`RevsetExpression`] variants depending on resolution state.
-    pub trait ExpressionState {
-        type CommitRef: Clone;
-        type Operation: Clone;
-    }
-
-    // Not constructible because these state types just define associated types.
-    #[derive(Debug)]
-    pub enum UserExpressionState {}
-    #[derive(Debug)]
-    pub enum ResolvedExpressionState {}
-}
-
-use private::ExpressionState;
-use private::ResolvedExpressionState;
-use private::UserExpressionState;
-
-impl ExpressionState for UserExpressionState {
-    type CommitRef = RevsetCommitRef;
-    type Operation = String;
-}
-
-impl ExpressionState for ResolvedExpressionState {
-    type CommitRef = Infallible;
-    type Operation = Infallible;
-}
-
-/// [`RevsetExpression`] that may contain unresolved commit refs.
-pub type UserRevsetExpression = RevsetExpression<UserExpressionState>;
-/// [`RevsetExpression`] that never contains unresolved commit refs.
-pub type ResolvedRevsetExpression = RevsetExpression<ResolvedExpressionState>;
 
 /// Tree of revset expressions describing DAG operations.
 ///
@@ -3362,50 +3284,6 @@ impl VisibilityResolutionContext<'_> {
         }
     }
 }
-
-pub trait Revset: fmt::Debug {
-    /// Streams in topological order with children before parents.
-    // TODO: Relax to BoxStream?
-    fn stream<'a>(&self) -> LocalBoxStream<'a, Result<CommitId, RevsetEvaluationError>>
-    where
-        Self: 'a;
-
-    /// Iterates commit/change id pairs in topological order.
-    fn commit_change_ids<'a>(
-        &self,
-    ) -> LocalBoxStream<'a, Result<(CommitId, ChangeId), RevsetEvaluationError>>
-    where
-        Self: 'a;
-
-    /// Streams graphs nodes (commit ID and edges) in topological order with
-    /// children before parents.
-    fn stream_graph<'a>(
-        &self,
-    ) -> LocalBoxStream<'a, Result<GraphNode<CommitId>, RevsetEvaluationError>>
-    where
-        Self: 'a;
-
-    /// Returns true if iterator will emit no commit nor error.
-    fn is_empty(&self) -> bool;
-
-    /// Inclusive lower bound and, optionally, inclusive upper bound of how many
-    /// commits are in the revset. The implementation can use its discretion as
-    /// to how much effort should be put into the estimation, and how accurate
-    /// the resulting estimate should be.
-    fn count_estimate(&self) -> Result<(usize, Option<usize>), RevsetEvaluationError>;
-
-    /// Returns a closure that checks if a commit is contained within the
-    /// revset.
-    ///
-    /// The implementation may construct and maintain any necessary internal
-    /// context to optimize the performance of the check.
-    fn containing_fn<'a>(&self) -> Box<RevsetContainingFn<'a>>
-    where
-        Self: 'a;
-}
-
-/// Function that checks if a commit is contained within the revset.
-pub type RevsetContainingFn<'a> = dyn Fn(&CommitId) -> Result<bool, RevsetEvaluationError> + 'a;
 
 pub trait RevsetStreamExt {
     fn commits(

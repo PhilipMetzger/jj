@@ -2538,6 +2538,7 @@ name = "jj-core"
 version = "0.42.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "blake2",
  "chrono",
  "clru",
@@ -2547,6 +2548,7 @@ dependencies = [
  "futures 0.3.32",
  "itertools 0.14.0",
  "jj-core-proc-macros",
+ "maplit",
  "pest",
  "pest_derive",
  "pollster",
@@ -2556,6 +2558,7 @@ dependencies = [
  "smallvec",
  "strsim",
  "tempfile",
+ "test-case",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

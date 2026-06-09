@@ -30,6 +30,8 @@ use futures::TryStreamExt as _;
 use futures::future::try_join_all;
 use futures::stream;
 use itertools::Itertools as _;
+use jj_core::repo::ReadonlyRepo as CoreReadonlyRepo;
+pub use jj_core::repo::Repo;
 use once_cell::sync::OnceCell;
 use thiserror::Error;
 use tracing::instrument;
@@ -116,60 +118,8 @@ use crate::tree_merge::MergeOptions;
 use crate::view::RenameWorkspaceError;
 use crate::view::View;
 
-pub trait Repo {
-    /// Base repository that contains all committed data. Returns `self` if this
-    /// is a `ReadonlyRepo`,
-    fn base_repo(&self) -> &ReadonlyRepo;
-
-    fn store(&self) -> &Arc<Store>;
-
-    fn op_store(&self) -> &Arc<dyn OpStore>;
-
-    fn index(&self) -> &dyn Index;
-
-    fn view(&self) -> &View;
-
-    fn submodule_store(&self) -> &Arc<dyn SubmoduleStore>;
-
-    fn resolve_change_id(
-        &self,
-        change_id: &ChangeId,
-    ) -> IndexResult<Option<ResolvedChangeTargets>> {
-        // Replace this if we added more efficient lookup method.
-        let prefix = HexPrefix::from_id(change_id);
-        match self.resolve_change_id_prefix(&prefix)? {
-            PrefixResolution::NoMatch => Ok(None),
-            PrefixResolution::SingleMatch(entries) => Ok(Some(entries)),
-            PrefixResolution::AmbiguousMatch => panic!("complete change_id should be unambiguous"),
-        }
-    }
-
-    fn resolve_change_id_prefix(
-        &self,
-        prefix: &HexPrefix,
-    ) -> IndexResult<PrefixResolution<ResolvedChangeTargets>>;
-
-    fn shortest_unique_change_id_prefix_len(
-        &self,
-        target_id_bytes: &ChangeId,
-    ) -> IndexResult<usize>;
-}
-
 pub struct ReadonlyRepo {
-    loader: RepoLoader,
-    operation: Operation,
-    index: Box<dyn ReadonlyIndex>,
-    change_id_index: OnceCell<Box<dyn ChangeIdIndex>>,
-    // TODO: This should eventually become part of the index and not be stored fully in memory.
-    view: View,
-}
-
-impl Debug for ReadonlyRepo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        f.debug_struct("ReadonlyRepo")
-            .field("store", &self.loader.store)
-            .finish_non_exhaustive()
-    }
+    inner: CoreReadonlyRepo,
 }
 
 #[derive(Error, Debug)]

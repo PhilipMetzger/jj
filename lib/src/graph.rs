@@ -22,67 +22,9 @@ use std::hash::Hash;
 use futures::Stream;
 use futures::TryStreamExt as _;
 use futures::stream;
-
-/// Node and edges pair of type `N` and `ID` respectively.
-///
-/// `ID` uniquely identifies a node within the graph. It's usually cheap to
-/// clone. There should be a pure `(&N) -> &ID` function.
-pub type GraphNode<N, ID = N> = (N, Vec<GraphEdge<ID>>);
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct GraphEdge<N> {
-    pub target: N,
-    pub edge_type: GraphEdgeType,
-}
-
-impl<N> GraphEdge<N> {
-    pub fn missing(target: N) -> Self {
-        Self {
-            target,
-            edge_type: GraphEdgeType::Missing,
-        }
-    }
-
-    pub fn direct(target: N) -> Self {
-        Self {
-            target,
-            edge_type: GraphEdgeType::Direct,
-        }
-    }
-
-    pub fn indirect(target: N) -> Self {
-        Self {
-            target,
-            edge_type: GraphEdgeType::Indirect,
-        }
-    }
-
-    pub fn map<M>(self, f: impl FnOnce(N) -> M) -> GraphEdge<M> {
-        GraphEdge {
-            target: f(self.target),
-            edge_type: self.edge_type,
-        }
-    }
-
-    pub fn is_missing(&self) -> bool {
-        self.edge_type == GraphEdgeType::Missing
-    }
-
-    pub fn is_direct(&self) -> bool {
-        self.edge_type == GraphEdgeType::Direct
-    }
-
-    pub fn is_indirect(&self) -> bool {
-        self.edge_type == GraphEdgeType::Indirect
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub enum GraphEdgeType {
-    Missing,
-    Direct,
-    Indirect,
-}
+pub use jj_core::graph::GraphEdge;
+pub use jj_core::graph::GraphEdgeType;
+pub use jj_core::graph::GraphNode;
 
 fn reachable_targets<N>(edges: &[GraphEdge<N>]) -> impl DoubleEndedIterator<Item = &N> {
     edges

@@ -12,11 +12,244 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Contains some basic methods around Revsets.
-// TODO: consider moving the optimizer into this.
+//! Contains the basic parts for Revset evaluation and the [`Revset`] trait which
+//! you need to customize for revset evaluation from the frontend.
 
+use std::any::Any;
+use std::fmt;
+use std::ops::Range;
+use std::sync::Arc;
+
+use futures::stream::LocalBoxStream;
+use thiserror::Error;
+
+use crate::backend::BackendError;
+use crate::backend::ChangeId;
+use crate::backend::CommitId;
+use crate::commit::Commit;
 use crate::dsl_util;
+use crate::fileset::FilesetExpression;
+use crate::graph::GraphNode;
 use crate::revset_parser;
+use crate::str_util::StringExpression;
+use crate::time_util::DatePattern;
+
+/// Error occurred during revset evaluation.
+#[derive(Debug, Error)]
+pub enum RevsetEvaluationError {
+    #[error("Unexpected error from commit backend")]
+    Backend(#[from] BackendError),
+    #[error(transparent)]
+    Other(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl RevsetEvaluationError {
+    // TODO: Create a higher-level error instead of putting non-BackendErrors in a
+    // BackendError
+    pub fn into_backend_error(self) -> BackendError {
+        match self {
+            Self::Backend(err) => err,
+            Self::Other(err) => BackendError::Other(err),
+        }
+    }
+}
+
+/// A custom revset filter expression, defined by an extension.
+pub trait RevsetFilterExtension: std::fmt::Debug + Any + Send + Sync {
+    /// Returns true iff this filter matches the specified commit.
+    fn matches_commit(&self, commit: &Commit) -> bool;
+}
+
+impl dyn RevsetFilterExtension {
+    /// Returns reference of the implementation type.
+    pub fn downcast_ref<T: RevsetFilterExtension>(&self) -> Option<&T> {
+        (self as &dyn Any).downcast_ref()
+    }
+}
+
+/// Represents the sides of a Diff which can be matched on.
+#[derive(Eq, Copy, Clone, Debug, PartialEq)]
+pub enum DiffMatchSide {
+    /// Match the diff on either side, left or right.
+    Either,
+    /// Match the diff on the left side.
+    Left,
+    /// Match the diff on the right side.
+    Right,
+}
+
+/// Represents a Predicate which a `Revset` can be filtered through.
+#[derive(Clone, Debug)]
+pub enum RevsetFilterPredicate {
+    /// Commits with number of parents in the range.
+    ParentCount(Range<u32>),
+    /// Commits with description matching the pattern.
+    Description(StringExpression),
+    /// Commits with first line of the description matching the pattern.
+    Subject(StringExpression),
+    /// Commits with author name matching the pattern.
+    AuthorName(StringExpression),
+    /// Commits with author email matching the pattern.
+    AuthorEmail(StringExpression),
+    /// Commits with author dates matching the given date pattern.
+    AuthorDate(DatePattern),
+    /// Commits with committer name matching the pattern.
+    CommitterName(StringExpression),
+    /// Commits with committer email matching the pattern.
+    CommitterEmail(StringExpression),
+    /// Commits with committer dates matching the given date pattern.
+    CommitterDate(DatePattern),
+    /// Commits modifying the paths specified by the fileset.
+    File(FilesetExpression),
+    /// Commits containing diffs matching the `text` pattern within the `files`.
+    DiffLines {
+        text: StringExpression,
+        files: FilesetExpression,
+        side: DiffMatchSide,
+    },
+    /// Commits with conflicts
+    HasConflict,
+    /// Commits that are cryptographically signed.
+    Signed,
+    /// Custom predicates provided by extensions
+    Extension(Arc<dyn RevsetFilterExtension>),
+}
+
+/// Describes evaluation plan of revset expression.
+///
+/// Unlike `RevsetExpression`, this doesn't contain unresolved symbols or `View`
+/// properties.
+///
+/// Use `RevsetExpression` API to build a query programmatically.
+// TODO: rename to BackendExpression?
+#[derive(Clone, Debug)]
+pub enum ResolvedExpression {
+    Commits(Vec<CommitId>),
+    Ancestors {
+        heads: Box<Self>,
+        generation: Range<u64>,
+        parents_range: Range<u32>,
+    },
+    /// Commits that are ancestors of `heads` but not ancestors of `roots`.
+    Range {
+        roots: Box<Self>,
+        heads: Box<Self>,
+        generation: Range<u64>,
+        // Parents range is only used for traversing heads, not roots
+        parents_range: Range<u32>,
+    },
+    /// Commits that are descendants of `roots` and ancestors of `heads`.
+    DagRange {
+        roots: Box<Self>,
+        heads: Box<Self>,
+        generation_from_roots: Range<u64>,
+    },
+    /// Commits reachable from `sources` within `domain`.
+    Reachable {
+        sources: Box<Self>,
+        domain: Box<Self>,
+    },
+    Heads(Box<Self>),
+    /// Heads of the set of commits which are ancestors of `heads` but are not
+    /// ancestors of `roots`, and which also are contained in `filter`.
+    HeadsRange {
+        roots: Box<Self>,
+        heads: Box<Self>,
+        parents_range: Range<u32>,
+        filter: Option<ResolvedPredicateExpression>,
+    },
+    Roots(Box<Self>),
+    Forks {
+        heads: Box<Self>,
+    },
+    ForkPoint(Box<Self>),
+    MergePoint {
+        roots: Box<Self>,
+        visible_heads: Box<Self>,
+    },
+    Bisect(Box<Self>),
+    HasSize {
+        candidates: Box<Self>,
+        count: usize,
+    },
+    Latest {
+        candidates: Box<Self>,
+        count: usize,
+    },
+    Coalesce(Box<Self>, Box<Self>),
+    Union(Box<Self>, Box<Self>),
+    /// Intersects `candidates` with `predicate` by filtering.
+    FilterWithin {
+        candidates: Box<Self>,
+        predicate: ResolvedPredicateExpression,
+    },
+    /// Intersects expressions by merging.
+    Intersection(Box<Self>, Box<Self>),
+    Difference(Box<Self>, Box<Self>),
+}
+
+/// A resolved Revset predicate.
+#[derive(Clone, Debug)]
+pub enum ResolvedPredicateExpression {
+    /// Pure filter predicate.
+    Filter(RevsetFilterPredicate),
+    /// The list of divergent heads.
+    Divergent {
+        visible_heads: Vec<CommitId>,
+    },
+    /// Set expression to be evaluated as filter. This is typically a subtree
+    /// node of `Union` with a pure filter predicate.
+    Set(Box<ResolvedExpression>),
+    NotIn(Box<Self>),
+    Union(Box<Self>, Box<Self>),
+    Intersection(Box<Self>, Box<Self>),
+}
+
+/// [`Revset`] gives you a way to implement Revset expressions in your
+/// [`Backend`].
+pub trait Revset: fmt::Debug {
+    /// Streams in topological order with children before parents.
+    // TODO: Relax to BoxStream?
+    fn stream<'a>(&self) -> LocalBoxStream<'a, Result<CommitId, RevsetEvaluationError>>
+    where
+        Self: 'a;
+
+    /// Iterates commit/change id pairs in topological order.
+    fn commit_change_ids<'a>(
+        &self,
+    ) -> LocalBoxStream<'a, Result<(CommitId, ChangeId), RevsetEvaluationError>>
+    where
+        Self: 'a;
+
+    /// Streams graphs nodes (commit ID and edges) in topological order with
+    /// children before parents.
+    fn stream_graph<'a>(
+        &self,
+    ) -> LocalBoxStream<'a, Result<GraphNode<CommitId>, RevsetEvaluationError>>
+    where
+        Self: 'a;
+
+    /// Returns true if iterator will emit no commit nor error.
+    fn is_empty(&self) -> bool;
+
+    /// Inclusive lower bound and, optionally, inclusive upper bound of how many
+    /// commits are in the revset. The implementation can use its discretion as
+    /// to how much effort should be put into the estimation, and how accurate
+    /// the resulting estimate should be.
+    fn count_estimate(&self) -> Result<(usize, Option<usize>), RevsetEvaluationError>;
+
+    /// Returns a closure that checks if a commit is contained within the
+    /// revset.
+    ///
+    /// The implementation may construct and maintain any necessary internal
+    /// context to optimize the performance of the check.
+    fn containing_fn<'a>(&self) -> Box<RevsetContainingFn<'a>>
+    where
+        Self: 'a;
+}
+
+/// Function that checks if a commit is contained within the revset.
+pub type RevsetContainingFn<'a> = dyn Fn(&CommitId) -> Result<bool, RevsetEvaluationError> + 'a;
 
 /// Formats a string as symbol by quoting and escaping it if necessary.
 ///

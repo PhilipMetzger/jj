@@ -12,10 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![expect(missing_docs)]
-
-use std::fmt::Debug;
-
-pub trait SubmoduleStore: Send + Sync + Debug {
-    fn name(&self) -> &str;
-}
+pub use jj_core::submodule_store::SubmoduleStore;

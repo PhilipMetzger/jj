@@ -67,7 +67,8 @@ pub enum SignBehavior {
 #[derive(Debug)]
 pub struct Signer {
     /// The CoreSigner contains all fields.
-    inner: CoreSigner,
+    // this is visible to the crate so we successfully can create a store.
+    pub(crate) inner: CoreSigner,
 }
 
 impl Signer {

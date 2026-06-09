@@ -2640,6 +2640,7 @@ name = "jj-core"
 version = "0.43.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "blake2",
  "bstr",
  "chrono",

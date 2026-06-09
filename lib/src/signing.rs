@@ -130,8 +130,6 @@ impl Signer {
     }
 
     /// Get acess the inner signer.
-    // TODO: use this when we lower the `Store`.
-    #[allow(dead_code)]
     pub(crate) fn inner(&self) -> &CoreSigner {
         &self.inner
     }

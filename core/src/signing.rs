@@ -12,22 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Contains the `SignBackend` trait required for various signing interactions.
+//! Contains the [`SignBackend`] trait required for various signing interactions
+//! and the [`Signer`] which provides a cache over various backends and signatures.
 
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Mutex;
 
 use crate::backend::CommitId;
+use crate::store::COMMIT_CACHE_CAPACITY;
 
 use clru::CLruCache;
 use thiserror::Error;
 
-// TODO: This is a duplication of `jj_lib::store::COMMIT_CACHE_CAPACITY`. Use the respective
-// constant when we lower `Store`.
-const SIGN_CACHE_CAPACITY: usize = 100;
-
-/// A status of the signature, part of the [Verification] type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SigStatus {
     /// Valid signature that matches the data.
@@ -107,7 +104,7 @@ impl Signer {
         Self {
             main_backend,
             backends: other_backends,
-            cache: Mutex::new(CLruCache::new(SIGN_CACHE_CAPACITY.try_into().unwrap())),
+            cache: Mutex::new(CLruCache::new(COMMIT_CACHE_CAPACITY.try_into().unwrap())),
         }
     }
 

@@ -167,7 +167,7 @@ pub struct ReadonlyRepo {
 impl Debug for ReadonlyRepo {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         f.debug_struct("ReadonlyRepo")
-            .field("store", &self.loader.store)
+            .field("store", &self.loader.store.as_ref())
             .finish_non_exhaustive()
     }
 }

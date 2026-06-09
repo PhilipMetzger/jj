@@ -1,4 +1,4 @@
-// Copyright 2021 The Jujutsu Authors
+// Copyright 2026 The Jujutsu Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![expect(missing_docs)]
+//! Contains the [`OpHeadsStore`] trait which is responsible for managing the
+//! heads of the Operation Log.
 
 use std::any::Any;
 use std::collections::HashSet;
@@ -30,24 +31,33 @@ use crate::op_store::OpStoreError;
 use crate::op_store::OperationId;
 use crate::operation::Operation;
 
+/// Represents all Errors which can occur when interacting with the
+/// [`OpHeadsStore`].
 #[derive(Debug, Error)]
 pub enum OpHeadsStoreError {
+    /// A error occured when reading the heads.
     #[error("Failed to read operation heads")]
     Read(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// A error occured when writing the new heads.
     #[error("Failed to record operation head {new_op_id}")]
     Write {
+        /// The id of the new operation.
         new_op_id: OperationId,
+        /// The source of the error.
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+    /// A error occured when acquiring the lock.
     #[error("Failed to lock operation heads store")]
     Lock(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
+/// A marker trait to implement a lock for the `OpHeadsStore`.
 pub trait OpHeadsStoreLock {}
 
 /// Manages the set of current heads of the operation log.
 #[async_trait]
 pub trait OpHeadsStore: Any + Send + Sync + Debug {
+    /// Get the name of the store.
     fn name(&self) -> &str;
 
     /// Remove the old op heads and add the new one.
@@ -77,7 +87,6 @@ impl dyn OpHeadsStore {
         (self as &dyn Any).downcast_ref()
     }
 }
-
 // Given an OpHeadsStore, fetch and resolve its op heads down to one under a
 // lock.
 //

@@ -1,4 +1,4 @@
-// Copyright 2021 The Jujutsu Authors
+// Copyright 2026 The Jujutsu Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![expect(missing_docs)]
+//! Utilities which work `Refs`.
 
 use itertools::EitherOrBoth;
 
@@ -105,6 +105,7 @@ fn iter_named_pairs<K: Ord, V1, V2>(
     )
 }
 
+/// Merge the ref targets in `left`, `base` and `right` on the given `index`.
 pub async fn merge_ref_targets(
     index: &dyn Index,
     left: &RefTarget,
@@ -134,6 +135,7 @@ pub async fn merge_ref_targets(
     }
 }
 
+/// Merge the remote refs `left`, `base` and `right` on the given `index`.
 pub async fn merge_remote_refs(
     index: &dyn Index,
     left: &RemoteRef,
@@ -154,6 +156,7 @@ pub async fn merge_remote_refs(
     Ok(RemoteRef { target, state })
 }
 
+/// Merge the ref targets in `conflict` on `index`.
 async fn merge_ref_targets_non_trivial(
     index: &dyn Index,
     conflict: &mut Merge<Option<CommitId>>,
@@ -164,6 +167,9 @@ async fn merge_ref_targets_non_trivial(
     Ok(())
 }
 
+/// Find the conflict pair to remove from `conflict` on the given `index`.
+/// Returns a `IndexResult` indicating if a removal position and new add
+/// position was found.
 async fn find_pair_to_remove(
     index: &dyn Index,
     conflict: &Merge<Option<CommitId>>,
@@ -198,16 +204,24 @@ async fn find_pair_to_remove(
 /// Pair of local and remote targets.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LocalAndRemoteRef<'a> {
+    /// The local ref target.
     pub local_target: &'a RefTarget,
+    /// The remote ref.
     pub remote_ref: &'a RemoteRef,
 }
 
+/// Describes the states a Ref push results in.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RefPushAction {
+    /// A update
     Update(Diff<Option<CommitId>>),
+    /// The push already matches the remote.
     AlreadyMatches,
+    /// The local ref is conflicted.
     LocalConflicted,
+    /// The remote ref is conflicted.
     RemoteConflicted,
+    /// The remote is untracked.
     RemoteUntracked,
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Jujutsu Authors
+// Copyright 2026 The Jujutsu Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![expect(missing_docs)]
+//! Contains `Tree` a shim similar to [`Commit`] over both a [`backend::TreeId`]
+//! and a [`backend::Tree`]. It also has helpers to make the creation of it
+//! easier.
 
 use std::borrow::Borrow;
 use std::fmt::Debug;
@@ -39,11 +41,17 @@ use crate::repo_path::RepoPathBuf;
 use crate::repo_path::RepoPathComponent;
 use crate::store::Store;
 
+/// A Tree stores information about a directory and from which `Store` it comes
+/// from.
 #[derive(Clone)]
 pub struct Tree {
+    /// The `Store` or backend this tree stems from.
     store: Arc<Store>,
+    /// The directory this `Tree` is associated with.
     dir: RepoPathBuf,
+    /// The Id of the `Tree`.
     id: TreeId,
+    /// The actual data from the backend.
     data: Arc<backend::Tree>,
 }
 
@@ -232,27 +240,15 @@ impl Iterator for TreeEntriesIterator<'_> {
     }
 }
 
-/// Extension method for converting a tree-value merge to a `Merge<Tree>`.
-// The auto trait bounds of the returned futures leak through the concrete
-// impls below, so callers are unaffected by the `async fn` here.
-#[expect(async_fn_in_trait)]
-pub trait ToTreeMergeExt {
+impl<T> Merge<Option<T>>
+where
+    T: Borrow<TreeValue>,
+{
     /// If every non-`None` term of a `MergedTreeValue`
     /// is a `TreeValue::Tree`, this converts it to
     /// a `Merge<Tree>`, with empty trees instead of
     /// any `None` terms. Otherwise, returns `None`.
-    async fn to_tree_merge(
-        &self,
-        store: &Arc<Store>,
-        dir: &RepoPath,
-    ) -> BackendResult<Option<Merge<Tree>>>;
-}
-
-impl<T> ToTreeMergeExt for Merge<Option<T>>
-where
-    T: Borrow<TreeValue>,
-{
-    async fn to_tree_merge(
+    pub async fn to_tree_merge(
         &self,
         store: &Arc<Store>,
         dir: &RepoPath,
@@ -280,36 +276,18 @@ where
     }
 }
 
-/// Extension methods for `Merge<Tree>`.
-// The auto trait bounds of the returned futures leak through the concrete
-// impls below, so callers are unaffected by the `async fn` here.
-#[expect(async_fn_in_trait)]
-pub trait TreeMergeExt: Sized {
+impl Merge<Tree> {
     /// The directory that is shared by all trees in the merge.
-    fn dir(&self) -> &RepoPath;
+    pub fn dir(&self) -> &RepoPath {
+        debug_assert!(self.iter().map(|tree| tree.dir()).all_equal());
+        self.first().dir()
+    }
 
     /// The value at the given basename. The value can be `Resolved` even if
     /// `self` is conflicted, which happens if the value at the path can be
     /// trivially merged. Does not recurse, so if `basename` refers to a Tree,
     /// then a `TreeValue::Tree` will be returned.
-    fn value(&self, basename: &RepoPathComponent) -> MergedTreeVal<'_>;
-
-    /// Gets the `Merge<Tree>` in a subdirectory of the current tree. If the
-    /// path doesn't correspond to a tree in any of the inputs to the merge,
-    /// then that entry will be replaced by an empty tree in the result.
-    async fn sub_tree(&self, name: &RepoPathComponent) -> BackendResult<Option<Self>>;
-
-    /// Look up the tree at the given path.
-    async fn sub_tree_recursive(&self, path: &RepoPath) -> BackendResult<Option<Self>>;
-}
-
-impl TreeMergeExt for Merge<Tree> {
-    fn dir(&self) -> &RepoPath {
-        debug_assert!(self.iter().map(|tree| tree.dir()).all_equal());
-        self.first().dir()
-    }
-
-    fn value(&self, basename: &RepoPathComponent) -> MergedTreeVal<'_> {
+    pub fn value(&self, basename: &RepoPathComponent) -> MergedTreeVal<'_> {
         if let Some(tree) = self.as_resolved() {
             return Merge::resolved(tree.value(basename));
         }
@@ -321,7 +299,10 @@ impl TreeMergeExt for Merge<Tree> {
         value
     }
 
-    async fn sub_tree(&self, name: &RepoPathComponent) -> BackendResult<Option<Self>> {
+    /// Gets the `Merge<Tree>` in a subdirectory of the current tree. If the
+    /// path doesn't correspond to a tree in any of the inputs to the merge,
+    /// then that entry will be replaced by an empty tree in the result.
+    pub async fn sub_tree(&self, name: &RepoPathComponent) -> BackendResult<Option<Self>> {
         let store = self.first().store();
         match self.value(name).into_resolved() {
             Ok(Some(TreeValue::Tree(sub_tree_id))) => {
@@ -353,7 +334,8 @@ impl TreeMergeExt for Merge<Tree> {
         }
     }
 
-    async fn sub_tree_recursive(&self, path: &RepoPath) -> BackendResult<Option<Self>> {
+    /// Look up the tree at the given path.
+    pub async fn sub_tree_recursive(&self, path: &RepoPath) -> BackendResult<Option<Self>> {
         let mut current_tree = self.clone();
         for name in path.components() {
             match current_tree.sub_tree(name).await? {

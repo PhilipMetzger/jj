@@ -31,6 +31,14 @@ use futures::TryStreamExt as _;
 use futures::future::try_join_all;
 use futures::stream;
 use itertools::Itertools as _;
+pub use jj_core::repo::CheckOutCommitError;
+pub use jj_core::repo::EditCommitError;
+use jj_core::repo::ReadonlyRepo as CoreReadonlyRepo;
+pub use jj_core::repo::Repo;
+use jj_core::repo::RepoLoader as CoreRepoLoader;
+pub use jj_core::repo::RepoLoaderError;
+pub use jj_core::repo::Rewrite;
+pub use jj_core::repo::RewriteRootCommit;
 use once_cell::sync::OnceCell;
 use thiserror::Error;
 use tracing::instrument;
@@ -117,61 +125,9 @@ use crate::tree_merge::MergeOptions;
 use crate::view::RenameWorkspaceError;
 use crate::view::View;
 
-#[async_trait(?Send)]
-pub trait Repo {
-    /// Base repository that contains all committed data. Returns `self` if this
-    /// is a `ReadonlyRepo`,
-    fn base_repo(&self) -> &ReadonlyRepo;
-
-    fn store(&self) -> &Arc<Store>;
-
-    fn op_store(&self) -> &Arc<dyn OpStore>;
-
-    fn index(&self) -> &dyn Index;
-
-    fn view(&self) -> &View;
-
-    fn submodule_store(&self) -> &Arc<dyn SubmoduleStore>;
-
-    async fn resolve_change_id(
-        &self,
-        change_id: &ChangeId,
-    ) -> IndexResult<Option<ResolvedChangeTargets>> {
-        // Replace this if we added more efficient lookup method.
-        let prefix = HexPrefix::from_id(change_id);
-        match self.resolve_change_id_prefix(&prefix).await? {
-            PrefixResolution::NoMatch => Ok(None),
-            PrefixResolution::SingleMatch(entries) => Ok(Some(entries)),
-            PrefixResolution::AmbiguousMatch => panic!("complete change_id should be unambiguous"),
-        }
-    }
-
-    async fn resolve_change_id_prefix(
-        &self,
-        prefix: &HexPrefix,
-    ) -> IndexResult<PrefixResolution<ResolvedChangeTargets>>;
-
-    async fn shortest_unique_change_id_prefix_len(
-        &self,
-        target_id_bytes: &ChangeId,
-    ) -> IndexResult<usize>;
-}
-
 pub struct ReadonlyRepo {
     loader: RepoLoader,
-    operation: Operation,
-    index: Box<dyn ReadonlyIndex>,
-    change_id_index: OnceCell<Box<dyn ChangeIdIndex>>,
-    // TODO: This should eventually become part of the index and not be stored fully in memory.
-    view: View,
-}
-
-impl Debug for ReadonlyRepo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        f.debug_struct("ReadonlyRepo")
-            .field("store", &self.loader.store)
-            .finish_non_exhaustive()
-    }
+    inner: CoreReadonlyRepo,
 }
 
 #[derive(Error, Debug)]
@@ -260,13 +216,18 @@ impl ReadonlyRepo {
             .context(&submodule_store_type_path)?;
         let submodule_store = Arc::from(submodule_store);
 
-        let loader = RepoLoader {
-            settings: settings.clone(),
-            store,
+        let store = store.clone();
+        let inner = CoreRepoLoader::new(
+            store.inner().clone(),
             op_store,
             op_heads_store,
             index_store,
             submodule_store,
+        );
+        let loader = RepoLoader {
+            settings: settings.clone(),
+            store,
+            inner,
         };
 
         let root_operation = loader.root_operation().await;
@@ -277,18 +238,19 @@ impl ReadonlyRepo {
         assert!(!root_view.heads().is_empty());
         let index = loader
             .index_store
-            .get_index_at_op(&root_operation, &loader.store)
+            .get_index_at_op(&root_operation, &loader.store.inner())
             .await
             // If the root op index couldn't be read, the index backend wouldn't
             // be initialized properly.
             .map_err(|err| BackendInitError(err.into()))?;
-        Ok(Arc::new(Self {
-            loader,
-            operation: root_operation,
+        let inner = CoreReadonlyRepo::new(
+            inner.clone(),
+            root_operation,
             index,
-            change_id_index: OnceCell::new(),
-            view: root_view,
-        }))
+            OnceCell::<dyn ChangeIdIndex + 'static>::new(),
+            root_view,
+        );
+        Ok(Arc::new(Self { loader, inner }))
     }
 
     pub fn loader(&self) -> &RepoLoader {
@@ -300,24 +262,19 @@ impl ReadonlyRepo {
     }
 
     pub fn operation(&self) -> &Operation {
-        &self.operation
+        &self.inner.operation()
     }
 
     pub fn view(&self) -> &View {
-        &self.view
+        &self.inner.view()
     }
 
     pub fn readonly_index(&self) -> &dyn ReadonlyIndex {
-        self.index.as_ref()
+        self.inner.index().as_ref()
     }
 
     fn change_id_index(&self) -> &dyn ChangeIdIndex {
-        self.change_id_index
-            .get_or_init(|| {
-                self.readonly_index()
-                    .change_id_index(&mut self.view().heads().iter())
-            })
-            .as_ref()
+        self.inner.change_id_index()
     }
 
     pub fn op_heads_store(&self) -> &Arc<dyn OpHeadsStore> {
@@ -600,32 +557,13 @@ pub fn read_store_type(
         .map_err(|source| StoreLoadError::ReadError { store, source })
 }
 
-#[derive(Debug, Error)]
-pub enum RepoLoaderError {
-    #[error(transparent)]
-    Backend(#[from] BackendError),
-    #[error(transparent)]
-    Index(#[from] IndexError),
-    #[error(transparent)]
-    IndexStore(#[from] IndexStoreError),
-    #[error(transparent)]
-    OpHeadsStoreError(#[from] OpHeadsStoreError),
-    #[error(transparent)]
-    OpStore(#[from] OpStoreError),
-    #[error(transparent)]
-    TransactionCommit(#[from] TransactionCommitError),
-}
-
 /// Helps create `ReadonlyRepo` instances of a repo at the head operation or at
 /// a given operation.
 #[derive(Clone)]
 pub struct RepoLoader {
     settings: UserSettings,
     store: Arc<Store>,
-    op_store: Arc<dyn OpStore>,
-    op_heads_store: Arc<dyn OpHeadsStore>,
-    index_store: Arc<dyn IndexStore>,
-    submodule_store: Arc<dyn SubmoduleStore>,
+    inner: CoreRepoLoader,
 }
 
 impl RepoLoader {
@@ -637,13 +575,18 @@ impl RepoLoader {
         index_store: Arc<dyn IndexStore>,
         submodule_store: Arc<dyn SubmoduleStore>,
     ) -> Self {
-        Self {
-            settings,
-            store,
+        let store = store.clone();
+        let inner = CoreRepoLoader::new(
+            store.inner().clone(),
             op_store,
             op_heads_store,
             index_store,
             submodule_store,
+        );
+        Self {
+            settings,
+            store,
+            inner,
         }
     }
 
@@ -677,13 +620,17 @@ impl RepoLoader {
         let submodule_store = Arc::from(
             store_factories.load_submodule_store(settings, &repo_path.join("submodule_store"))?,
         );
-        Ok(Self {
-            settings: settings.clone(),
-            store,
+        let inner = CoreRepoLoader::new(
+            store.inner().clone(),
             op_store,
             op_heads_store,
             index_store,
             submodule_store,
+        );
+        Ok(Self {
+            settings: settings.clone(),
+            store: store.clone(),
+            inner,
         })
     }
 
@@ -696,50 +643,28 @@ impl RepoLoader {
     }
 
     pub fn index_store(&self) -> &Arc<dyn IndexStore> {
-        &self.index_store
+        &self.inner.index_store()
     }
 
     pub fn op_store(&self) -> &Arc<dyn OpStore> {
-        &self.op_store
+        &self.inner.op_store()
     }
 
     pub fn op_heads_store(&self) -> &Arc<dyn OpHeadsStore> {
-        &self.op_heads_store
+        &self.inner.op_heads_store()
     }
 
     pub fn submodule_store(&self) -> &Arc<dyn SubmoduleStore> {
-        &self.submodule_store
+        &self.inner.submodule_store()
     }
 
     pub async fn load_at_head(&self) -> Result<Arc<ReadonlyRepo>, RepoLoaderError> {
-        let op = op_heads_store::resolve_op_heads(
-            self.op_heads_store.as_ref(),
-            &self.op_store,
-            async |op_heads| -> Result<Operation, RepoLoaderError> {
-                assert!(op_heads.len() > 1);
-                let workspace_name = None;
-                let transaction_description = Some("reconcile divergent operations");
-                let transaction_attributes = [];
-                let (merged_repo, _num_rebased) = self
-                    .merge_operations(
-                        op_heads,
-                        workspace_name,
-                        transaction_description,
-                        transaction_attributes,
-                    )
-                    .await?;
-                Ok(merged_repo.operation().clone())
-            },
-        )
-        .await?;
-        let view = op.view().await?;
-        self.finish_load(op, view).await
+        self.inner.load_at_head()?
     }
 
     #[instrument(skip(self))]
     pub async fn load_at(&self, op: &Operation) -> Result<Arc<ReadonlyRepo>, RepoLoaderError> {
-        let view = op.view().await?;
-        self.finish_load(op.clone(), view).await
+        self.inner.load_at(op)?
     }
 
     pub fn create_from(
@@ -748,12 +673,16 @@ impl RepoLoader {
         view: View,
         index: Box<dyn ReadonlyIndex>,
     ) -> Arc<ReadonlyRepo> {
-        let repo = ReadonlyRepo {
-            loader: self.clone(),
+        let inner = CoreReadonlyRepo::new(
+            self.inner.clone(),
             operation,
             index,
-            change_id_index: OnceCell::new(),
+            OnceCell::<ChangeIdIndex + 'static>::new(),
             view,
+        );
+        let repo = ReadonlyRepo {
+            loader: self.clone(),
+            inner,
         };
         Arc::new(repo)
     }
@@ -763,15 +692,12 @@ impl RepoLoader {
 
     /// Returns the root operation.
     pub async fn root_operation(&self) -> Operation {
-        self.load_operation(self.op_store.root_operation_id())
-            .await
-            .expect("failed to read root operation")
+        self.inner.root_operation().await
     }
 
     /// Loads the specified operation from the operation store.
     pub async fn load_operation(&self, id: &OperationId) -> OpStoreResult<Operation> {
-        let data = self.op_store.read_operation(id).await?;
-        Ok(Operation::new(self.op_store.clone(), id.clone(), data))
+        self.inner.load_operation(id).await
     }
 
     /// Merges the given `operations`. Returns the merged repo and the number of
@@ -903,39 +829,21 @@ impl RepoLoader {
     ) -> Result<Arc<ReadonlyRepo>, RepoLoaderError> {
         let index = self
             .index_store
-            .get_index_at_op(&operation, &self.store)
+            .get_index_at_op(&operation, &self.store.inner())
             .await?;
-        let repo = ReadonlyRepo {
-            loader: self.clone(),
+        let inner = CoreReadonlyRepo::new(
+            self.inner.clone(),
             operation,
             index,
-            change_id_index: OnceCell::new(),
+            OnceCell::<dyn ChangeIdIndex + 'static>::new(),
             view,
+        );
+
+        let repo = ReadonlyRepo {
+            loader: self.clone(),
+            inner,
         };
         Ok(Arc::new(repo))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Rewrite {
-    /// The old commit was rewritten as this new commit. Children should be
-    /// rebased onto the new commit.
-    Rewritten(CommitId),
-    /// The old commit was rewritten as multiple other commits. Children should
-    /// not be rebased.
-    Divergent(Vec<CommitId>),
-    /// The old commit was abandoned. Children should be rebased onto the given
-    /// commits (typically the parents of the old commit).
-    Abandoned(Vec<CommitId>),
-}
-
-impl Rewrite {
-    fn new_parent_ids(&self) -> &[CommitId] {
-        match self {
-            Self::Rewritten(new_parent_id) => std::slice::from_ref(new_parent_id),
-            Self::Divergent(new_parent_ids) => new_parent_ids.as_slice(),
-            Self::Abandoned(new_parent_ids) => new_parent_ids.as_slice(),
-        }
     }
 }
 
@@ -2122,7 +2030,7 @@ impl Repo for MutableRepo {
         &self.base_repo
     }
 
-    fn store(&self) -> &Arc<Store> {
+    fn store(&self) -> &Arc<jj_core::store::Store> {
         self.base_repo.store()
     }
 
@@ -2157,31 +2065,4 @@ impl Repo for MutableRepo {
         let change_id_index = self.index.change_id_index(&mut self.view().heads().iter());
         change_id_index.shortest_unique_prefix_len(target_id).await
     }
-}
-
-/// Error from attempts to check out the root commit for editing
-#[derive(Debug, Error)]
-#[error("Cannot rewrite the root commit")]
-pub struct RewriteRootCommit;
-
-/// Error from attempts to edit a commit
-#[derive(Debug, Error)]
-pub enum EditCommitError {
-    #[error("Current working-copy commit not found")]
-    WorkingCopyCommitNotFound(#[source] BackendError),
-    #[error(transparent)]
-    RewriteRootCommit(#[from] RewriteRootCommit),
-    #[error(transparent)]
-    BackendError(#[from] BackendError),
-    #[error(transparent)]
-    IndexError(#[from] IndexError),
-}
-
-/// Error from attempts to check out a commit
-#[derive(Debug, Error)]
-pub enum CheckOutCommitError {
-    #[error("Failed to create new working-copy commit")]
-    CreateCommit(#[from] BackendError),
-    #[error("Failed to edit commit")]
-    EditCommit(#[from] EditCommitError),
 }

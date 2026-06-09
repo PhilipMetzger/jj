@@ -1,4 +1,4 @@
-// Copyright 2020 The Jujutsu Authors
+// Copyright 2026 The Jujutsu Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![expect(missing_docs)]
+//! Contains the [`SubmoduleStore`] trait which models Git Submodules.
+//! This trait is currently very incomplete.
 
-pub use jj_core::operation::Operation;
+use std::fmt::Debug;
+
+/// A trait which models Git Submodule interactions, currently very incomplete.
+pub trait SubmoduleStore: Send + Sync + Debug {
+    /// The name of this submodule store.
+    fn name(&self) -> &str;
+}

@@ -32,6 +32,7 @@ indexmap = { workspace = true }
 interim = { workspace = true }
 itertools = { workspace = true }
 jj-core-proc-macros = { workspace = true }
+pollster = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
 ref-cast = { workspace = true }
@@ -40,6 +41,7 @@ serde = { workspace = true }
 smallvec = { workspace = true }
 strsim = { workspace = true }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

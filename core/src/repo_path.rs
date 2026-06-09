@@ -34,6 +34,7 @@ use ref_cast::ref_cast_custom;
 use thiserror::Error;
 
 use crate::content_hash::ContentHash;
+use crate::file_util;
 use crate::merge::Diff;
 
 /// An error from `RepoPathUiConverter::parse_file_path`.
@@ -690,61 +691,6 @@ impl<P: AsRef<RepoPathComponent>> Extend<P> for RepoPathBuf {
             self.value.push_str(component.as_ref().as_internal_str());
         }
     }
-}
-
-/// `RepoPath` contained invalid file/directory component such as `..`.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error(r#"Invalid repository path "{}""#, path.as_internal_file_string())]
-pub struct InvalidRepoPathError {
-    /// Path containing an error.
-    pub path: RepoPathBuf,
-    /// Source error.
-    pub source: InvalidRepoPathComponentError,
-}
-
-/// `RepoPath` component was invalid. (e.g. `..`)
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error(r#"Invalid path component "{component}""#)]
-pub struct InvalidRepoPathComponentError {
-    /// The invalid component.
-    pub component: Box<str>,
-}
-
-impl InvalidRepoPathComponentError {
-    /// Attaches the `path` that caused the error.
-    pub fn with_path(self, path: &RepoPath) -> InvalidRepoPathError {
-        InvalidRepoPathError {
-            path: path.to_owned(),
-            source: self,
-        }
-    }
-}
-
-/// An error which occurs during relative path parsing.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
-pub enum RelativePathParseError {
-    /// An invalid component was seen.
-    #[error(r#"Invalid component "{component}" in repo-relative path "{path}""#)]
-    InvalidComponent {
-        /// The invalid component.
-        component: Box<str>,
-        /// The path it was a component of.
-        path: Box<Path>,
-    },
-    /// The path was not UTF-8.
-    #[error(r#"Not valid UTF-8 path "{path}""#)]
-    InvalidUtf8 {
-        /// The path which did not contain UTF-8 characters.
-        path: Box<Path>,
-    },
-}
-
-fn is_valid_repo_path_component_str(value: &str) -> bool {
-    !value.is_empty() && !value.contains('/')
-}
-
-fn is_valid_repo_path_str(value: &str) -> bool {
-    !value.starts_with('/') && !value.ends_with('/') && !value.contains("//")
 }
 
 /// Tree that maps `RepoPath` to value of type `V`.

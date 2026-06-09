@@ -1,4 +1,4 @@
-// Copyright 2023 The Jujutsu Authors
+// Copyright 2026 The Jujutsu Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,9 +55,7 @@ use crate::repo_path::RepoPath;
 use crate::repo_path::RepoPathBuf;
 use crate::repo_path::RepoPathComponent;
 use crate::store::Store;
-use crate::tree::ToTreeMergeExt as _;
 use crate::tree::Tree;
-use crate::tree::TreeMergeExt as _;
 use crate::tree_merge::merge_trees;
 
 /// Presents a view of a merged set of trees at the root directory, as well as

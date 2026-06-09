@@ -710,7 +710,6 @@ impl<T> Merge<Merge<T>> {
     }
 }
 
-#[cfg(test)]
 mod tests {
     use test_case::test_case;
 

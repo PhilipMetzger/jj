@@ -47,6 +47,7 @@ pub mod signing;
 pub mod store;
 pub mod tree;
 pub mod view;
+pub mod working_copy;
 pub mod workspace_store;
 
 #[cfg(test)]

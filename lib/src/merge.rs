@@ -23,12 +23,12 @@ use std::fmt::Write as _;
 use std::hash::Hash;
 use std::iter;
 use std::iter::zip;
-use std::ops::Deref;
 use std::slice;
 use std::sync::Arc;
 
 use futures::future::try_join_all;
 use itertools::Itertools as _;
+pub use jj_core::merge::Diff;
 use smallvec::SmallVec;
 use smallvec::smallvec;
 use smallvec::smallvec_inline;
@@ -44,79 +44,6 @@ use crate::repo_path::RepoPath;
 use crate::repo_path::RepoPathComponent;
 use crate::store::Store;
 use crate::tree::Tree;
-
-/// A generic diff/transition from one value to another.
-///
-/// This is not a diff in the `patch(1)` sense. See `diff::ContentDiff` for
-/// that.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Diff<T> {
-    /// The state before
-    pub before: T,
-    /// The state after
-    pub after: T,
-}
-
-impl<T> Diff<T> {
-    /// Create a new diff
-    pub fn new(before: T, after: T) -> Self {
-        Self { before, after }
-    }
-
-    /// Apply a function to both values
-    pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Diff<U> {
-        Diff {
-            before: f(self.before),
-            after: f(self.after),
-        }
-    }
-
-    /// Combine a `Diff<T>` and a `Diff<U>` into a `Diff<(T, U)>`.
-    pub fn zip<U>(self, other: Diff<U>) -> Diff<(T, U)> {
-        Diff {
-            before: (self.before, other.before),
-            after: (self.after, other.after),
-        }
-    }
-
-    /// Inverts a diff, swapping the before and after terms.
-    pub fn invert(self) -> Self {
-        Self {
-            before: self.after,
-            after: self.before,
-        }
-    }
-
-    /// Convert a `&Diff<T>` into a `Diff<&T>`.
-    pub fn as_ref(&self) -> Diff<&T> {
-        Diff {
-            before: &self.before,
-            after: &self.after,
-        }
-    }
-
-    /// Converts a `Diff<T>` or `&Diff<T>` to `Diff<&T::Target>`. (e.g.
-    /// `Diff<String>` to `Diff<&str>`)
-    pub fn as_deref(&self) -> Diff<&T::Target>
-    where
-        T: Deref,
-    {
-        self.as_ref().map(Deref::deref)
-    }
-
-    /// Convert a diff into an array `[before, after]`.
-    pub fn into_array(self) -> [T; 2] {
-        [self.before, self.after]
-    }
-}
-
-impl<T: Eq> Diff<T> {
-    /// Whether the diff represents a change, i.e. if `before` and `after` are
-    /// not equal
-    pub fn is_changed(&self) -> bool {
-        self.before != self.after
-    }
-}
 
 /// Whether to resolve conflict that makes the same change at all sides.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize)]

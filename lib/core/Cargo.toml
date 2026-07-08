@@ -19,12 +19,14 @@ clru = { workspace = true }
 digest = { workspace = true }
 etcetera = { workspace = true }
 futures = { workspace = true }
+globset = { workspace = true }
 itertools = { workspace = true }
 jj-core-proc-macros = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
 pollster = { workspace = true }
 ref-cast = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
 smallvec = { workspace = true }
 strsim = { workspace = true }
@@ -37,6 +39,7 @@ tracing = { workspace = true }
 assert_matches = { workspace = true }
 eyre = { workspace = true }
 insta = { workspace = true }
+maplit = { workspace = true }
 test-case = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

@@ -34,6 +34,118 @@ use ref_cast::ref_cast_custom;
 use thiserror::Error;
 
 use crate::content_hash::ContentHash;
+use crate::merge::Diff;
+
+/// An error from `RepoPathUiConverter::parse_file_path`.
+#[derive(Debug, Error)]
+pub enum UiPathParseError {
+    /// We failed to parse the filesystem path.
+    #[error(transparent)]
+    Fs(FsPathParseError),
+}
+
+/// Converts `RepoPath`s to and from plain strings as displayed to the user
+/// (e.g. relative to CWD).
+#[derive(Debug, Clone)]
+pub enum RepoPathUiConverter {
+    /// Variant for a local file system. Paths are interpreted relative to `cwd`
+    /// with the repo rooted in `base`.
+    ///
+    /// The `cwd` and `base` paths are supposed to be absolute and normalized in
+    /// the same manner.
+    Fs {
+        /// The current working directory.
+        cwd: PathBuf,
+        /// The repo's root path.
+        base: PathBuf,
+    },
+    // TODO: Add a no-op variant that uses the internal `RepoPath` representation. Can be useful
+    // on a server.
+}
+
+impl RepoPathUiConverter {
+    /// Format a path for display in the UI.
+    pub fn format_file_path(&self, file: &RepoPath) -> String {
+        match self {
+            Self::Fs { cwd, base } => {
+                file_util::relative_path(cwd, &file.to_fs_path_unchecked(base))
+                    .display()
+                    .to_string()
+            }
+        }
+    }
+
+    /// Format a copy from `before` to `after` for display in the UI by
+    /// extracting common components and producing something like
+    /// "common/prefix/{before => after}/common/suffix".
+    ///
+    /// If `before == after`, this is equivalent to `format_file_path()`.
+    pub fn format_copied_path(&self, paths: Diff<&RepoPath>) -> String {
+        match self {
+            Self::Fs { .. } => {
+                let paths = paths.map(|path| self.format_file_path(path));
+                collapse_copied_path(paths.as_deref(), std::path::MAIN_SEPARATOR)
+            }
+        }
+    }
+
+    /// Parses a path from the UI.
+    ///
+    /// It's up to the implementation whether absolute paths are allowed, and
+    /// where relative paths are interpreted as relative to.
+    pub fn parse_file_path(&self, input: &str) -> Result<RepoPathBuf, UiPathParseError> {
+        match self {
+            Self::Fs { cwd, base } => {
+                RepoPathBuf::parse_fs_path(cwd, base, input).map_err(UiPathParseError::Fs)
+            }
+        }
+    }
+}
+
+fn collapse_copied_path(paths: Diff<&str>, separator: char) -> String {
+    // The last component should never match middle components. This is ensured
+    // by including trailing separators. e.g. ("a/b", "a/b/x") => ("a/", _)
+    let components = paths.map(|path| path.split_inclusive(separator));
+    let prefix_len: usize = iter::zip(components.before, components.after)
+        .take_while(|(before, after)| before == after)
+        .map(|(_, after)| after.len())
+        .sum();
+    if paths.before.len() == prefix_len && paths.after.len() == prefix_len {
+        return paths.after.to_owned();
+    }
+
+    // The first component should never match middle components, but the first
+    // uncommon middle component can. e.g. ("a/b", "x/a/b") => ("", "/b"),
+    // ("a/b", "a/x/b") => ("a/", "/b")
+    let components = paths.map(|path| {
+        let mut remainder = &path[prefix_len.saturating_sub(1)..];
+        iter::from_fn(move || {
+            let pos = remainder.rfind(separator)?;
+            let (prefix, last) = remainder.split_at(pos);
+            remainder = prefix;
+            Some(last)
+        })
+    });
+    let suffix_len: usize = iter::zip(components.before, components.after)
+        .take_while(|(before, after)| before == after)
+        .map(|(_, after)| after.len())
+        .sum();
+
+    // Middle range may be invalid (start > end) because the same separator char
+    // can be distributed to both common prefix and suffix. e.g.
+    // ("a/b", "a/x/b") == ("a//b", "a/x/b") => ("a/", "/b")
+    let middle = paths.map(|path| path.get(prefix_len..path.len() - suffix_len).unwrap_or(""));
+
+    let mut collapsed = String::new();
+    collapsed.push_str(&paths.after[..prefix_len]);
+    collapsed.push('{');
+    collapsed.push_str(middle.before);
+    collapsed.push_str(" => ");
+    collapsed.push_str(middle.after);
+    collapsed.push('}');
+    collapsed.push_str(&paths.after[paths.after.len() - suffix_len..]);
+    collapsed
+}
 
 /// Owned `RepoPath` component.
 #[derive(ContentHash, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -719,6 +831,73 @@ impl<V: Debug> Debug for RepoPathTree<V> {
     }
 }
 
+/// `RepoPath` contained invalid file/directory component such as `..`.
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[error(r#"Invalid repository path "{}""#, path.as_internal_file_string())]
+pub struct InvalidRepoPathError {
+    /// Path containing an error.
+    pub path: RepoPathBuf,
+    /// Source error.
+    pub source: InvalidRepoPathComponentError,
+}
+
+/// `RepoPath` component was invalid. (e.g. `..`)
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[error(r#"Invalid path component "{component}""#)]
+pub struct InvalidRepoPathComponentError {
+    /// The invalid component.
+    pub component: Box<str>,
+}
+
+impl InvalidRepoPathComponentError {
+    /// Attaches the `path` that caused the error.
+    pub fn with_path(self, path: &RepoPath) -> InvalidRepoPathError {
+        InvalidRepoPathError {
+            path: path.to_owned(),
+            source: self,
+        }
+    }
+}
+
+/// An error which occurs during relative path parsing.
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
+pub enum RelativePathParseError {
+    /// An invalid component was seen.
+    #[error(r#"Invalid component "{component}" in repo-relative path "{path}""#)]
+    InvalidComponent {
+        /// The invalid component.
+        component: Box<str>,
+        /// The path it was a component of.
+        path: Box<Path>,
+    },
+    /// The path was not UTF-8.
+    #[error(r#"Not valid UTF-8 path "{path}""#)]
+    InvalidUtf8 {
+        /// The path which did not contain UTF-8 characters.
+        path: Box<Path>,
+    },
+}
+
+/// An error which occurs when we're parsing paths.
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[error(r#"Path "{input}" is not in the repo "{base}""#)]
+pub struct FsPathParseError {
+    /// Repository or workspace root path relative to the `cwd`.
+    pub base: Box<Path>,
+    /// Input path without normalization.
+    pub input: Box<Path>,
+    /// Source error.
+    pub source: RelativePathParseError,
+}
+
+fn is_valid_repo_path_component_str(value: &str) -> bool {
+    !value.is_empty() && !value.contains('/')
+}
+
+fn is_valid_repo_path_str(value: &str) -> bool {
+    !value.starts_with('/') && !value.ends_with('/') && !value.contains("//")
+}
+
 #[cfg(test)]
 mod tests {
     use std::panic;
@@ -1104,6 +1283,48 @@ mod tests {
         assert_eq!(
             repo_path("foo/bar").split_common_prefix(RepoPath::root()),
             (RepoPath::root(), repo_path("foo/bar"))
+        );
+    }
+
+    #[test]
+    fn test_format_copied_path() {
+        let ui = RepoPathUiConverter::Fs {
+            cwd: PathBuf::from("."),
+            base: PathBuf::from("."),
+        };
+
+        let format = |before, after| {
+            ui.format_copied_path(Diff::new(repo_path(before), repo_path(after)))
+                .replace('\\', "/")
+        };
+
+        assert_eq!(format("one/two/three", "one/two/three"), "one/two/three");
+        assert_eq!(format("one/two", "one/two/three"), "one/{two => two/three}");
+        assert_eq!(format("one/two", "zero/one/two"), "{one => zero/one}/two");
+        assert_eq!(format("one/two/three", "one/two"), "one/{two/three => two}");
+        assert_eq!(format("zero/one/two", "one/two"), "{zero/one => one}/two");
+        assert_eq!(
+            format("one/two", "one/two/three/one/two"),
+            "one/{ => two/three/one}/two"
+        );
+
+        assert_eq!(format("two/three", "four/three"), "{two => four}/three");
+        assert_eq!(
+            format("one/two/three", "one/four/three"),
+            "one/{two => four}/three"
+        );
+        assert_eq!(format("one/two/three", "one/three"), "one/{two => }/three");
+        assert_eq!(format("one/two", "one/four"), "one/{two => four}");
+        assert_eq!(format("two", "four"), "{two => four}");
+        assert_eq!(format("file1", "file2"), "{file1 => file2}");
+        assert_eq!(format("file-1", "file-2"), "{file-1 => file-2}");
+        assert_eq!(
+            format("x/something/something/2to1.txt", "x/something/2to1.txt"),
+            "x/something/{something => }/2to1.txt"
+        );
+        assert_eq!(
+            format("x/something/1to2.txt", "x/something/something/1to2.txt"),
+            "x/something/{ => something}/1to2.txt"
         );
     }
 }

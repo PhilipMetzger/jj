@@ -1,4 +1,4 @@
-// Copyright 2021-2023 The Jujutsu Authors
+// Copyright 2026 The Jujutsu Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! String helpers.
+//! Contains [`StringPattern`], [`GlobPattern`] and [`StringExpression`] which are used by the
+//! Revset language.
 
 use std::borrow::Borrow;
 use std::borrow::Cow;

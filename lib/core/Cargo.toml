@@ -15,11 +15,14 @@ keywords.workspace = true
 
 blake2 = { workspace = true }
 chrono = { workspace = true }
+bstr = { workspace = true }
 clru = { workspace = true }
 digest = { workspace = true }
 etcetera = { workspace = true }
+either = { workspace = true }
 futures = { workspace = true }
 globset = { workspace = true }
+interim = { workspace = true }
 itertools = { workspace = true }
 jj-core-proc-macros = { workspace = true }
 pest = { workspace = true }

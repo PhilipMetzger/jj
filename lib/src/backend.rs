@@ -22,11 +22,13 @@ use std::slice;
 use std::time::SystemTime;
 
 use async_trait::async_trait;
-use chrono::TimeZone as _;
 use futures::AsyncRead;
 use futures::stream::BoxStream;
 pub use jj_core::backend::ChangeId;
 pub use jj_core::backend::CommitId;
+pub use jj_core::backend::MillisSinceEpoch;
+pub use jj_core::backend::Timestamp;
+pub use jj_core::backend::TimestampOutOfRange;
 use thiserror::Error;
 
 use crate::content_hash::ContentHash;
@@ -63,73 +65,6 @@ impl CopyId {
     // TODO: Delete this
     pub fn placeholder() -> Self {
         Self::new(vec![])
-    }
-}
-
-/// Error that may occur when converting a `Timestamp` to a `Datetime``.
-#[derive(Debug, Error)]
-#[error("Out-of-range date")]
-pub struct TimestampOutOfRange;
-
-/// The number of milliseconds since the Unix epoch.
-#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
-pub struct MillisSinceEpoch(pub i64);
-
-/// A timestamp with millisecond precision and a time zone offset.
-#[derive(ContentHash, Hash, Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
-pub struct Timestamp {
-    /// The number of milliseconds since the Unix epoch.
-    pub timestamp: MillisSinceEpoch,
-    /// Timezone offset in minutes
-    pub tz_offset: i32,
-}
-
-impl Timestamp {
-    /// Returns the current local time as a `Timestamp`.
-    pub fn now() -> Self {
-        Self::from_datetime(chrono::offset::Local::now())
-    }
-
-    /// Creates a `Timestamp` from the given `DateTime`.
-    pub fn from_datetime<Tz: chrono::TimeZone<Offset = chrono::offset::FixedOffset>>(
-        datetime: chrono::DateTime<Tz>,
-    ) -> Self {
-        Self {
-            timestamp: MillisSinceEpoch(datetime.timestamp_millis()),
-            tz_offset: datetime.offset().local_minus_utc() / 60,
-        }
-    }
-
-    /// Converts this `Timestamp` to a `DateTime`.
-    pub fn to_datetime(
-        &self,
-    ) -> Result<chrono::DateTime<chrono::FixedOffset>, TimestampOutOfRange> {
-        let utc = match chrono::Utc.timestamp_opt(
-            self.timestamp.0.div_euclid(1000),
-            (self.timestamp.0.rem_euclid(1000)) as u32 * 1000000,
-        ) {
-            chrono::LocalResult::None => {
-                return Err(TimestampOutOfRange);
-            }
-            chrono::LocalResult::Single(x) => x,
-            chrono::LocalResult::Ambiguous(y, _z) => y,
-        };
-
-        Ok(utc.with_timezone(
-            &chrono::FixedOffset::east_opt(self.tz_offset * 60)
-                .unwrap_or_else(|| chrono::FixedOffset::east_opt(0).unwrap()),
-        ))
-    }
-}
-
-impl serde::Serialize for Timestamp {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // TODO: test is_human_readable() to use raw format?
-        let t = self.to_datetime().map_err(serde::ser::Error::custom)?;
-        t.serialize(serializer)
     }
 }
 

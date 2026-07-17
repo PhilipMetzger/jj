@@ -43,6 +43,8 @@ pub mod repo_path;
 pub mod revset;
 pub mod revset_parser;
 pub mod signing;
+pub mod str_util;
+pub mod time_util;
 pub mod workspace_store;
 
 #[cfg(test)]
